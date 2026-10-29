@@ -103,16 +103,16 @@ export const CheckinAdaptativo: React.FC<CheckinAdaptativoProps> = ({
   const [dores, setDores] = useState<string>('');
 
   // Adesão, Treino & Hábitos
-  const [adesao, setAdesao] = useState<number>(95);
-  const [aguaLitros, setAguaLitros] = useState<number>(3.0);
+  const [adesao, setAdesao] = useState<number>(90);
+  const [aguaLitros, setAguaLitros] = useState<number>(2.5);
   const [treinoCumprido, setTreinoCumprido] = useState<boolean>(true);
-  const [progressoTreino, setProgressoTreino] = useState<string>('aumentou');
+  const [progressoTreino, setProgressoTreino] = useState<string>('manteve');
   const [tentativasEstagnadas, setTentativasEstagnadas] = useState<number>(0);
-  const [cardioMinutos, setCardioMinutos] = useState<number>(130);
-  const [passos, setPassos] = useState<number>(8500);
-  const [semanasDefice, setSemanasDefice] = useState<number>(4);
+  const [cardioMinutos, setCardioMinutos] = useState<number>(0);
+  const [passos, setPassos] = useState<number>(6000);
+  const [semanasDefice, setSemanasDefice] = useState<number>(0);
   const [notas, setNotas] = useState<string>('');
-  const [alimentos, setAlimentos] = useState<string>('Arroz, Frango, Ovos, Aveia, Azeite, Maçã, Brócolos');
+  const [alimentos, setAlimentos] = useState<string>('');
   const [aplicarAjustesAuto, setAplicarAjustesAuto] = useState<boolean>(false);
 
   // Último resultado gerado
@@ -174,11 +174,15 @@ export const CheckinAdaptativo: React.FC<CheckinAdaptativoProps> = ({
         setPerfil(p);
         if (p.peso_atual) {
           setPesoAtual(p.peso_atual);
-          setPesoAnteriorRef((prev) => (prev !== null ? prev : p.peso_atual));
+          if (histRes && histRes.length > 0) {
+            setPesoAnteriorRef((prev) => (prev !== null ? prev : p.peso_atual));
+          }
         }
         if (p.bf_atual) {
           setBfAtual((prev) => (prev !== '' ? prev : p.bf_atual));
-          setBfAnteriorRef((prev) => (prev !== null ? prev : p.bf_atual));
+          if (histRes && histRes.length > 0) {
+            setBfAnteriorRef((prev) => (prev !== null ? prev : p.bf_atual));
+          }
         }
         if (p.calorias_atuais) setCaloriasAtuais(p.calorias_atuais);
         if (p.fase_atual) setFaseAtual(p.fase_atual);

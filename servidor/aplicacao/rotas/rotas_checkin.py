@@ -64,7 +64,8 @@ def sincronizar_ajuste_dieta(
                 print(f"[Checkin] Erro ao sincronizar projeto_ativo_json: {err}")
 
     # 3. Plano de Dieta Ativo
-    plano_ativo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
+    uid_local = perfil.utilizador_id if perfil else 1
+    plano_ativo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid_local).first()
     if plano_ativo:
         plano_ativo.calorias = calorias_float
         if novos_macros:
@@ -96,7 +97,7 @@ def sincronizar_ajuste_dieta(
 
     # 4. Registo Diário de Hoje
     data_hoje = datetime.utcnow().strftime("%Y-%m-%d")
-    registo_hoje = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_hoje).first()
+    registo_hoje = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_hoje, RegistoDiarioConsumo.utilizador_id == uid_local).first()
     if registo_hoje:
         registo_hoje.calorias_alvo = calorias_float
         if novos_macros:
@@ -114,13 +115,18 @@ def sincronizar_ajuste_dieta(
 
 
 @roteador_checkin.post("/processar")
-async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Session = Depends(obter_sessao_bd)):
+async def processar_checkin_semanal(
+    dados: EsquemaCheckInEntrada,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     1. Executa o diagnóstico matemático cruzando variação de peso, cintura e rendimento no treino.
     2. Aciona o Coach de IA para avaliar se o atleta está no caminho certo e propor ajustes precisos na dieta e treino.
     3. Guarda o registo completo de medidas e biofeedback no histórico.
     4. Opcionalmente aplica os ajustes à dieta ativa de imediato.
     """
+    uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     chave_api = dados.chave_api_ia or (perfil.chave_api_ia if perfil else None)
 
@@ -415,7 +421,7 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
     }
 
     # Determinar projeto ativo
-    proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True).first()
+    proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
     id_projeto_ativo = proj_ativo.id if proj_ativo else None
     nome_projeto_ativo = proj_ativo.nome if proj_ativo else (dados.nome_projeto or info_projeto.get("nome_projeto") or info_projeto.get("tipo_intencao", "Projeto Fisiológico"))
 
@@ -423,6 +429,7 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
     metricas_extras["nome_projeto"] = nome_projeto_ativo
 
     registo = RegistoCheckIn(
+        utilizador_id=uid,
         id_projeto=id_projeto_ativo,
         nome_projeto=nome_projeto_ativo,
         peso_medio=dados.peso_medio_atual,
@@ -474,11 +481,16 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
 
 
 @roteador_checkin.post("/aplicar-ajustes")
-def aplicar_ajustes_checkin(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def aplicar_ajustes_checkin(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Aplica as calorias e macros recomendadas no check-in diretamente ao perfil,
     ao projeto ativo, ao plano de refeições e ao diário de consumo.
     """
+    uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
@@ -531,8 +543,9 @@ def obter_historico_checkins(
     return lista
 
 
-def calcular_status_periodico(sessao: Session) -> Dict[str, Any]:
+def calcular_status_periodico(sessao: Session, usuario: Optional[ContaUtilizador] = None) -> Dict[str, Any]:
     """Calcula o estado de periodicidade do check-up para aviso proativo ao atleta."""
+    uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     cfg = {}
     if perfil and getattr(perfil, "configuracao_checkin_json", None):
@@ -613,14 +626,22 @@ def calcular_status_periodico(sessao: Session) -> Dict[str, Any]:
 
 
 @roteador_checkin.get("/status-periodico")
-def obter_status_checkin_periodico(sessao: Session = Depends(obter_sessao_bd)):
+def obter_status_checkin_periodico(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o estado da periodicidade do check-up do atleta (dias decorridos, próximo agendamento e alertas)."""
-    return calcular_status_periodico(sessao)
+    return calcular_status_periodico(sessao, usuario)
 
 
 @roteador_checkin.post("/configurar-periodo")
-def configurar_periodo_checkin(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def configurar_periodo_checkin(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Permite ao atleta configurar o intervalo do check-in (ex: a cada 7 dias) e preferências de aviso."""
+    uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     if not perfil:
         perfil = PerfilUtilizador()
@@ -640,13 +661,18 @@ def configurar_periodo_checkin(dados: dict, sessao: Session = Depends(obter_sess
 
     return {
         "mensagem": f"Periodicidade de check-up configurada para cada {frequencia} dias com sucesso!",
-        "status": calcular_status_periodico(sessao)
+        "status": calcular_status_periodico(sessao, usuario)
     }
 
 
 @roteador_checkin.post("/calcular-bf-navy")
-def endpoint_calcular_bf_navy(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def endpoint_calcular_bf_navy(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Calcula a estimativa de gordura corporal (% BF) através da fórmula científica da Marinha Americana (US Navy)."""
+    uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     sexo = dados.get("sexo") or (perfil.sexo if perfil else "masculino")
     altura_cm = float(dados.get("altura_cm") or (perfil.altura_cm if perfil else 178.0))

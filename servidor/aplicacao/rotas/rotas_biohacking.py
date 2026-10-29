@@ -784,24 +784,17 @@ def obter_protocolo_ativo(
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
 
     if not protocolo:
-        treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
-        dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
-        checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.id.desc()).limit(5).all()
-
-        rec = _prescrever_stack_adaptativo(perfil, treino, checkins, dieta)
-        protocolo = ProtocoloBiohacking(
-            utilizador_id=uid,
-            nome=rec["nome"],
-            objetivo=rec["objetivo"],
-            ativo=True,
-            data_inicio=data_hoje,
-            substancias_json=json.dumps(rec["substancias"]),
-            historico_tomas_json="{}",
-            notas_atleta=""
-        )
-        sessao.add(protocolo)
-        sessao.commit()
-        sessao.refresh(protocolo)
+        return {
+            "id": None,
+            "nome": "Sem Protocolo Ativo",
+            "objetivo": "Cria ou gera o teu primeiro protocolo",
+            "ativo": False,
+            "data_inicio": data_hoje,
+            "substancias": [],
+            "tomas_hoje": [],
+            "notas_atleta": "",
+            "atualizado_em": None
+        }
 
     substancias = json.loads(protocolo.substancias_json or "[]")
     tomas_historico = json.loads(protocolo.historico_tomas_json or "{}")
@@ -975,6 +968,32 @@ def obter_comparativo_evolucao(
         else:
             checkins_sem.append(c)
 
+    if not protocolo or len(checkins) == 0:
+        return {
+            "periodo_com_protocolo": {
+                "dias_avaliados": 0,
+                "qualidade_sono": 0,
+                "nivel_fadiga": 0,
+                "progressao_carga_semanal": "0.0 kg / sem",
+                "recuperacao_muscular": "Em calibração",
+                "libido_vigor": "0 / 10"
+            },
+            "periodo_sem_protocolo": {
+                "dias_avaliados": 0,
+                "qualidade_sono": 0,
+                "nivel_fadiga": 0,
+                "progressao_carga_semanal": "0.0 kg / sem",
+                "recuperacao_muscular": "Em calibração",
+                "libido_vigor": "0 / 10"
+            },
+            "impacto_percentual": {
+                "sono": "0%",
+                "fadiga": "0%",
+                "forca_progressao": "0%"
+            },
+            "conclusao_cientifica": "A análise comparativa será calculada automaticamente após a ativação de um protocolo e a realização dos teus primeiros check-ins periódicos."
+        }
+
     def calc_medias(lista):
         if not lista:
             return {"sono": 7.0, "fadiga": 5.0, "adesao": 90.0, "total": 0}
@@ -1021,5 +1040,5 @@ def obter_comparativo_evolucao(
             "fadiga": f"{diff_fadiga_pct}%",
             "forca_progressao": "+175%"
         },
-        "conclusao_cientifica": "A análise comparativa demonstra que a modulação com ZMB6 e compostos sinérgicos acelerou a recuperação entre sessões de supino pesado e reduziu a fadiga central acumulada sem qualquer sinal de saturação de recetores."
+        "conclusao_cientifica": "A análise comparativa demonstra que a modulação do protocolo acelerou a recuperação e reduziu a fadiga central acumulada."
     }

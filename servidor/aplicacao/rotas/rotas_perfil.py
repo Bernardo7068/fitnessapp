@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import (
     PerfilUtilizador, RegistoDiarioConsumo, PlanoDietaGuardado, PlanoTreinoGuardado,
-    ProjetoFisiologico, RegistoCheckIn
+    ProjetoFisiologico, RegistoCheckIn, RegistoTreinoExecutado
 )
 from ..esquemas.esquemas import (
     EsquemaPerfilEntrada, EsquemaProjecaoRequisicao, EsquemaAtivarFaseProjeto,
@@ -35,21 +35,27 @@ def obter_perfil(
     uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     
-    # Calcular métricas matemáticas atuais
+    # Calcular métricas matemáticas atuais com valores padrão seguros caso o perfil ainda não tenha dados
+    peso_calc = perfil.peso_atual or 70.0
+    altura_calc = perfil.altura_cm or 175.0
+    idade_calc = perfil.idade or 25
+    bf_calc = perfil.bf_atual or 15.0
+    calorias_calc = perfil.calorias_atuais or 2200.0
+
     composicao = calcular_composicao_e_tdee(
-        peso_kg=perfil.peso_atual,
-        altura_cm=perfil.altura_cm,
-        idade=perfil.idade,
-        sexo=perfil.sexo,
-        nivel_atividade=perfil.nivel_atividade,
-        percentual_gordura=perfil.bf_atual
+        peso_kg=peso_calc,
+        altura_cm=altura_calc,
+        idade=idade_calc,
+        sexo=perfil.sexo or "masculino",
+        nivel_atividade=perfil.nivel_atividade or "moderado",
+        percentual_gordura=bf_calc
     )
     
     macros = calcular_distribuicao_macros(
-        calorias_alvo=perfil.calorias_atuais,
-        peso_kg=perfil.peso_atual,
+        calorias_alvo=calorias_calc,
+        peso_kg=peso_calc,
         massa_magra_kg=composicao.massa_magra_kg,
-        objetivo=perfil.fase_atual
+        objetivo=perfil.fase_atual or "manutencao"
     )
 
     return {
@@ -905,11 +911,27 @@ def eliminar_projeto(id_proj: int, sessao: Session = Depends(obter_sessao_bd)):
 # MEMÓRIA & DIAGNÓSTICO ADAPTATIVO DA IA (TREINO E NUTRIÇÃO)
 # ==============================================================================
 
-def _gerar_memoria_treino_padrao(perfil: PerfilUtilizador, plano: PlanoTreinoGuardado = None, checkins = None) -> dict:
-    peso = perfil.peso_atual or 70.0
-    fase = (perfil.fase_atual or "bulk").upper()
+def _gerar_memoria_treino_padrao(perfil: PerfilUtilizador, plano: PlanoTreinoGuardado = None, checkins = None, total_treinos: int = 0) -> dict:
+    peso = perfil.peso_atual
+    fase = (perfil.fase_atual or "manutencao").upper()
     
-    # Detetar se há queixas de articulações em check-ins
+    # Se o atleta ainda não tem dados nem treinos registados:
+    tem_dados = bool((checkins and len(checkins) > 0) or total_treinos > 0 or (plano and plano.historico_alteracoes_json and plano.historico_alteracoes_json != "[]"))
+    
+    if not tem_dados:
+        return {
+            "capacidade_forca": "Em calibração. Regista os teus primeiros treinos para o sistema calcular o teu recrutamento neuromuscular e a tua capacidade de sobrecarga progressiva.",
+            "tolerancia_volume_e_pump": "A aguardar dados reais de treino para mapear a tua capacidade de recuperação a volume e resposta metabólica.",
+            "perfil_recuperacao": "A aguardar registos de descanso entre séries e recuperação entre sessões.",
+            "pontos_fortes_e_foco": "Será mapeado automaticamente com base na evolução das tuas cargas em cada exercício.",
+            "diretriz_algoritmo": "Executar o plano com cargas confortáveis (RPE 7-8) para estabelecer a tua linha de base.",
+            "resumo_transparente": "O sistema ainda não possui dados históricos suficientes para traçar o teu perfil neurológico e biomecânico individual. Inicia o teu plano de treinos para calibrar a prescrição.",
+            "historico_feedbacks": [],
+            "observacoes_atleta": "",
+            "atualizado_em": datetime.now().strftime("%d/%m/%Y %H:%M")
+        }
+
+    # Se já tem histórico real:
     queixas_recentes = []
     if checkins:
         for c in checkins[:4]:
@@ -924,12 +946,13 @@ def _gerar_memoria_treino_padrao(perfil: PerfilUtilizador, plano: PlanoTreinoGua
             alteracoes = []
 
     substituicoes_txt = f"{len(alteracoes)} exercício(s) adaptado(s) por conforto biomecânico." if alteracoes else "Nenhuma restrição articular crítica detetada."
+    peso_str = f" ({peso:.1f} kg)" if peso else ""
 
     return {
-        "capacidade_forca": f"Muito Alta para o peso ({peso:.1f} kg). Excelente recrutamento neuromuscular e capacidade de aplicar tensão mecânica real.",
+        "capacidade_forca": f"Muito Alta para o peso{peso_str}. Excelente recrutamento neuromuscular e capacidade de aplicar tensão mecânica real.",
         "tolerancia_volume_e_pump": "Alta necessidade psicológica de pump e densidade metabólica. Excelente tolerância a volume em grupos pequenos (deltóides, braços); risco de estagnação se ultrapassar 10 séries pesadas para o mesmo grupo muscular grande na mesma sessão.",
         "perfil_recuperacao": "Recuperação potente do SNC quando respeitado o descanso de 2.5 a 3 minutos entre séries pesadas. Atenção ao volume cumulativo nos cotovelos e ombros em sessões de empurrar.",
-        "pontos_fortes_e_foco": "Cadeia de empurrar (peito e tríceps) com resposta rápida; foco recomendado em peito clavicular (inclinado com alongamento) e deltóide lateral com técnicas de alta densidade.",
+        "pontos_fortes_e_foco": "Cadeia de empurrar com resposta rápida; foco recomendado em peito clavicular e deltóide lateral com técnicas de alta densidade.",
         "diretriz_algoritmo": "Satisfazer a mente e o pump do atleta utilizando finalizadores metabólicos (Drop-sets, Myo-reps, Rest-Pause) no último exercício isolador, mantendo as primeiras 3-4 séries pesadas focadas em sobrecarga progressiva limpa.",
         "resumo_transparente": "O sistema reconhece que a tua motivação e adesão aumentam com a sensação de congestão muscular (pump). Para que o teu corpo continue a progredir em hipertrofia sem acumular fadiga excessiva ou sobrecarga articular, as cargas pesadas são concentradas nas primeiras séries e o volume complementar é direcionado para técnicas de alta densidade.",
         "historico_feedbacks": [
@@ -943,8 +966,8 @@ def _gerar_memoria_treino_padrao(perfil: PerfilUtilizador, plano: PlanoTreinoGua
 
 
 def _gerar_memoria_nutricao_padrao(perfil: PerfilUtilizador, plano: PlanoDietaGuardado = None, checkins = None) -> dict:
-    fase = (perfil.fase_atual or "bulk").upper()
-    calorias = perfil.calorias_atuais or 2400.0
+    fase = (perfil.fase_atual or "manutencao").upper()
+    calorias = perfil.calorias_atuais
 
     prefs_dict = {}
     if perfil.preferencias_alimentares_json:
@@ -953,8 +976,8 @@ def _gerar_memoria_nutricao_padrao(perfil: PerfilUtilizador, plano: PlanoDietaGu
         except Exception:
             prefs_dict = {}
 
-    habito_apetite = prefs_dict.get("habitos_apetite") or "Pouco apetite matinal / necessidade de digestão leve ao acordar"
-    alimentos_pref = prefs_dict.get("alimentos_preferidos") or "Arroz, aveia, batata, frango, ovos, iogurte, azeite"
+    habito_apetite = prefs_dict.get("habitos_apetite")
+    alimentos_pref = prefs_dict.get("alimentos_preferidos")
 
     alteracoes = []
     if plano and plano.historico_alteracoes_json:
@@ -963,17 +986,35 @@ def _gerar_memoria_nutricao_padrao(perfil: PerfilUtilizador, plano: PlanoDietaGu
         except Exception:
             alteracoes = []
 
+    tem_dados = bool((checkins and len(checkins) > 0) or alteracoes or habito_apetite or alimentos_pref)
+
+    if not tem_dados:
+        return {
+            "padrao_apetite": "Em calibração. Regista as tuas preferências e apetite no primeiro check-in.",
+            "resposta_digestiva": "A aguardar biofeedback digestivo e de saciedade.",
+            "alimentos_blindados": "Nenhum alimento blindado ou substituído ainda.",
+            "capacidade_metabolica": "A aguardar dados para calcular a taxa metabólica e resposta calórica real.",
+            "diretriz_algoritmo": "Seguir as metas basais recomendadas e registar o consumo real no diário alimentar.",
+            "resumo_transparente": "O sistema irá mapear a tua tolerância digestiva e saciedade à medida que realizares check-ins e adaptações de refeições.",
+            "historico_feedbacks": [],
+            "observacoes_atleta": "",
+            "atualizado_em": datetime.now().strftime("%d/%m/%Y %H:%M")
+        }
+
+    habito_apetite = habito_apetite or "Apetite equilibrado ao longo do dia"
+    alimentos_pref = alimentos_pref or "Fontes limpas e naturais de hidratos e proteínas"
     blindagem_txt = f"{len(alteracoes)} troca(s) registada(s) e blindada(s) nesta fase." if alteracoes else "Todos os alimentos da rotina base foram bem tolerados."
+    calorias_txt = f" ({calorias:.0f} kcal na fase {fase})" if calorias else ""
 
     return {
-        "padrao_apetite": f"{habito_apetite}. As porções do pequeno-almoço devem ser reduzidas ou fracionadas para não causar peso gástrico.",
-        "resposta_digestiva": "Digestão rápida e eficiente com fontes de hidratos complexos limpos (aveia, arroz, batata). Sensibilidade gástrica se houver excesso de gorduras perto do treino.",
+        "padrao_apetite": f"{habito_apetite}. As porções devem respeitar o conforto gástrico do atleta.",
+        "resposta_digestiva": "Digestão eficiente com fontes de hidratos complexos limpos. Sensibilidade gástrica se houver excesso de gorduras perto do treino.",
         "alimentos_blindados": f"Prioridade aos alimentos preferidos ({alimentos_pref}). {blindagem_txt}",
-        "capacidade_metabolica": f"Adesão consistente às metas calóricas ({calorias:.0f} kcal na fase {fase}). Flexibilidade com o sistema de equivalências sem alteração indesejada da composição corporal.",
+        "capacidade_metabolica": f"Adesão consistente às metas calóricas{calorias_txt}. Flexibilidade com o sistema de equivalências sem alteração indesejada da composição corporal.",
         "diretriz_algoritmo": "Concentrar a maior densidade energética e hidratos no pré e pós-treino (glicogénio muscular) e no almoço/jantar. Proteger o início do dia com opções leves para respeitar o apetite biológico real.",
-        "resumo_transparente": "O sistema registou que refeições volumosas ao acordar prejudicam o teu conforto gástrico. As doses foram calibradas para manter a manhã leve e concentrar a energia nos momentos onde tens mais fome e precisas de combustível para render no treino.",
+        "resumo_transparente": "O sistema calibra as doses para manter a digestão leve e concentrar a energia nos momentos de maior rendimento físico.",
         "historico_feedbacks": [
-            "Regra de alívio matinal ativada para o pequeno-almoço",
+            "Regra de digestão leve ativada",
             "Alimentos preferidos priorizados nas recalibrações de doses",
             "Blindagem ativa contra reintrodução de alimentos rejeitados"
         ],
@@ -990,15 +1031,11 @@ def obter_memoria_ia(
     """Retorna o diagnóstico contínuo e a memória que a IA tem guardada sobre o treino e nutrição do atleta."""
     uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid)
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
 
-    plano_treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
-    plano_dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
-    checkins = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.id.desc()).limit(5).all()
+    plano_treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
+    plano_dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
+    checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.id.desc()).limit(5).all()
+    total_treinos = sessao.query(RegistoTreinoExecutado).filter(RegistoTreinoExecutado.utilizador_id == uid).count()
 
     # Memória de Treino
     memoria_treino = None
@@ -1009,7 +1046,7 @@ def obter_memoria_ia(
             memoria_treino = None
 
     if not memoria_treino:
-        memoria_treino = _gerar_memoria_treino_padrao(perfil, plano_treino, checkins)
+        memoria_treino = _gerar_memoria_treino_padrao(perfil, plano_treino, checkins, total_treinos)
         perfil.memoria_treino_ia_json = json.dumps(memoria_treino)
         sessao.commit()
 
@@ -1085,12 +1122,13 @@ def reanalisar_memoria_ia(
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
 
     tipo = dados.get("tipo")  # 'treino', 'nutricao' ou 'todos'
-    plano_treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
-    plano_dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
-    checkins = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.id.desc()).limit(5).all()
+    plano_treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
+    plano_dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
+    checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.id.desc()).limit(5).all()
+    total_treinos = sessao.query(RegistoTreinoExecutado).filter(RegistoTreinoExecutado.utilizador_id == uid).count()
 
     if tipo in ["treino", "todos"]:
-        mem_t = _gerar_memoria_treino_padrao(perfil, plano_treino, checkins)
+        mem_t = _gerar_memoria_treino_padrao(perfil, plano_treino, checkins, total_treinos)
         perfil.memoria_treino_ia_json = json.dumps(mem_t)
 
     if tipo in ["nutricao", "todos"]:

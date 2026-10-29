@@ -101,15 +101,12 @@ def obter_admin_atual(
     return utilizador
 
 
+from .ajudantes_rotas import obter_ou_criar_perfil
+
+
 def obter_perfil_utilizador_ativo(sessao: Session, utilizador_id: int, nome_padrao: str = "Atleta") -> PerfilUtilizador:
     """Procura o perfil de um utilizador específico ou inicializa um novo."""
-    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == utilizador_id).first()
-    if not perfil:
-        perfil = PerfilUtilizador(utilizador_id=utilizador_id, nome=nome_padrao)
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
-    return perfil
+    return obter_ou_criar_perfil(sessao, utilizador_id, nome_padrao)
 
 
 # ==============================================================================

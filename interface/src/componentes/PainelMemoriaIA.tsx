@@ -121,7 +121,7 @@ export const PainelMemoriaIA: React.FC<PainelMemoriaIAProps> = ({ tipo, classNam
             {/* Resumo compacto de 1 linha */}
             <span className="hidden sm:inline-block text-xs text-slate-400 font-normal truncate max-w-md">
               • {ehTreino
-                ? `${(memoria as MemoriaTreinoIA).capacidade_forca.split('.')[0]} • Tolerância a pump alta`
+                ? `${(memoria as MemoriaTreinoIA).capacidade_forca.split('.')[0]}`
                 : `${(memoria as MemoriaNutricaoIA).padrao_apetite.split('.')[0]}`}
             </span>
           </div>
