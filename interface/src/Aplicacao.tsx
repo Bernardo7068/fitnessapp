@@ -112,9 +112,14 @@ export const Aplicacao: React.FC = () => {
     );
   }
 
-  // Se não estiver autenticado, exibe o ecrã de Login / Registo
+  // Se não estiver autenticado, exibe o ecrã de Login / Registo com o botão de instalação PWA disponível
   if (!utilizador) {
-    return <EcraLogin aoAutenticar={(u) => { setUtilizador(u); setAbaAtiva('metas'); }} />;
+    return (
+      <>
+        <EcraLogin aoAutenticar={(u) => { setUtilizador(u); setAbaAtiva('metas'); }} />
+        <BotaoInstalarPWA />
+      </>
+    );
   }
 
   const eAdmin = utilizador.papel === 'admin';
