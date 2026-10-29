@@ -4,7 +4,10 @@ Rotas de Perfil, Biometria e Projetor de Metas a Longo Prazo.
 
 import json
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from .ajudantes_rotas import resolver_utilizador_id, obter_ou_criar_perfil
+from .rotas_auth import obter_utilizador_opcional, ContaUtilizador
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import (
@@ -25,14 +28,12 @@ roteador_perfil = APIRouter(prefix="/api/perfil", tags=["Perfil e Metas"])
 
 
 @roteador_perfil.get("/")
-def obter_perfil(sessao: Session = Depends(obter_sessao_bd)):
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        # Criar perfil padrão se ainda não existir
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
+def obter_perfil(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     
     # Calcular métricas matemáticas atuais
     composicao = calcular_composicao_e_tdee(
@@ -59,11 +60,13 @@ def obter_perfil(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_perfil.post("/atualizar")
-def atualizar_perfil(dados: EsquemaPerfilEntrada, sessao: Session = Depends(obter_sessao_bd)):
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
+def atualizar_perfil(
+    dados: EsquemaPerfilEntrada,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else dados.nome)
 
     perfil.nome = dados.nome
     perfil.idade = dados.idade
@@ -91,15 +94,17 @@ def atualizar_perfil(dados: EsquemaPerfilEntrada, sessao: Session = Depends(obte
 
 
 @roteador_perfil.post("/ativar-fase-projeto")
-def ativar_fase_projeto(dados: EsquemaAtivarFaseProjeto, sessao: Session = Depends(obter_sessao_bd)):
+def ativar_fase_projeto(
+    dados: EsquemaAtivarFaseProjeto,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Sincroniza imediatamente o perfil do atleta com a fase escolhida do projeto:
     fase atual, calorias diárias e diretrizes de treino/cardio.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
 
     perfil.fase_atual = dados.fase_tipo
     perfil.calorias_atuais = dados.calorias_diarias
@@ -113,9 +118,9 @@ def ativar_fase_projeto(dados: EsquemaAtivarFaseProjeto, sessao: Session = Depen
 
     proj_entidade = None
     if dados.id_projeto:
-        proj_entidade = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.id == dados.id_projeto).first()
+        proj_entidade = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.id == dados.id_projeto, ProjetoFisiologico.utilizador_id == uid).first()
     if not proj_entidade:
-        proj_entidade = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True).first()
+        proj_entidade = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
 
     info_projeto = {
         "id_projeto": proj_entidade.id if proj_entidade else None,
@@ -372,19 +377,22 @@ def calcular_projecao(requisicao: EsquemaProjecaoRequisicao):
 # =====================================================================
 
 @roteador_perfil.get("/projetos")
-def listar_projetos(sessao: Session = Depends(obter_sessao_bd)):
+def listar_projetos(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Lista todos os projetos registados pelo atleta (ativos, concluídos e em teste).
-    Migra automaticamente o projeto legado presente em perfil.projeto_ativo_json se a tabela estiver vazia.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
-    projetos = sessao.query(ProjetoFisiologico).order_by(
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
+    projetos = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.utilizador_id == uid).order_by(
         ProjetoFisiologico.ativo.desc(),
         ProjetoFisiologico.criado_em.desc()
     ).all()
 
-    # Auto-migração: se a tabela de projetos estiver vazia mas houver um projeto ativo no perfil
-    if not projetos and perfil and perfil.projeto_ativo_json:
+    # Auto-migração apenas para o Administrador (utilizador 1)
+    if uid == 1 and not projetos and perfil and perfil.projeto_ativo_json:
         try:
             info = json.loads(perfil.projeto_ativo_json)
             nome_p = info.get("nome_projeto") or info.get("tipo_intencao") or f"Projeto ({info.get('peso_atual_kg', perfil.peso_atual)}kg ➔ {info.get('peso_alvo_kg', perfil.peso_alvo)}kg)"
@@ -490,21 +498,21 @@ def listar_projetos(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_perfil.post("/projetos")
-def criar_projeto(dados: EsquemaCriarProjeto, sessao: Session = Depends(obter_sessao_bd)):
+def criar_projeto(
+    dados: EsquemaCriarProjeto,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Cria e guarda um novo projeto fisiológico com nome identificável, metas e fases.
     Opcionalmente ativa-o de imediato no motor.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
 
     if dados.ativar_imediatamente:
-        # Desativar projetos anteriores
-        sessao.query(ProjetoFisiologico).update({"ativo": False})
+        # Desativar projetos anteriores do próprio atleta
+        sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.utilizador_id == uid).update({"ativo": False})
 
     fase1_tipo = "cut"
     fase1_nome = "Fase 1"
@@ -515,6 +523,7 @@ def criar_projeto(dados: EsquemaCriarProjeto, sessao: Session = Depends(obter_se
         fase1_kcal = float(dados.fases[0].get("calorias_diarias", 2000.0))
 
     novo_projeto = ProjetoFisiologico(
+        utilizador_id=uid,
         nome=dados.nome,
         descricao=dados.descricao or "",
         tipo_intencao=dados.tipo_intencao or "Transformação Corporal",
@@ -974,9 +983,13 @@ def _gerar_memoria_nutricao_padrao(perfil: PerfilUtilizador, plano: PlanoDietaGu
 
 
 @roteador_perfil.get("/memoria-ia")
-def obter_memoria_ia(sessao: Session = Depends(obter_sessao_bd)):
+def obter_memoria_ia(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o diagnóstico contínuo e a memória que a IA tem guardada sobre o treino e nutrição do atleta."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     if not perfil:
         perfil = PerfilUtilizador()
         sessao.add(perfil)
@@ -1020,9 +1033,14 @@ def obter_memoria_ia(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_perfil.post("/memoria-ia/atualizar")
-def atualizar_memoria_ia(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def atualizar_memoria_ia(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Permite ao atleta adicionar notas ou refinar o diagnóstico que a IA tem dele."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
 
@@ -1055,9 +1073,14 @@ def atualizar_memoria_ia(dados: dict, sessao: Session = Depends(obter_sessao_bd)
 
 
 @roteador_perfil.post("/memoria-ia/reanalisar")
-def reanalisar_memoria_ia(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def reanalisar_memoria_ia(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Regenera a memória e o diagnóstico da IA cruzando os dados mais recentes de check-ins e planos."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
 

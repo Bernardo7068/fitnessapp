@@ -4,7 +4,10 @@ Rotas de Treino, Catálogo de Exercícios, Geração Otimizada e Sobrecarga Prog
 
 import json
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from .ajudantes_rotas import resolver_utilizador_id, obter_ou_criar_perfil
+from .rotas_auth import obter_utilizador_opcional, ContaUtilizador
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import PlanoTreinoGuardado, RegistoTreinoExecutado, PerfilUtilizador, ProjetoFisiologico
@@ -57,18 +60,23 @@ def calcular_progressao(requisicao: EsquemaProgressaoCargaRequisicao):
 
 
 @roteador_treinos.post("/salvar-plano")
-def salvar_plano_treino(dados_plano: dict, sessao: Session = Depends(obter_sessao_bd)):
+def salvar_plano_treino(
+    dados_plano: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Guarda ou atualiza o plano de treino ativo com todas as alterações manuais do atleta."""
-    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
     sessoes_lista = dados_plano.get("sessoes", [])
     dias_calculados = len(sessoes_lista) if sessoes_lista else dados_plano.get("dias_por_semana", 4)
     volume_total = sum(sum(ex.get("series", 3) for ex in s.get("exercicios", [])) for s in sessoes_lista)
 
     if not plano:
-        plano = PlanoTreinoGuardado(ativo=True)
+        plano = PlanoTreinoGuardado(ativo=True, utilizador_id=uid)
         sessao.add(plano)
 
-    proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True).first()
+    proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
     if proj_ativo and not plano.id_projeto:
         plano.id_projeto = proj_ativo.id
         plano.nome_projeto = proj_ativo.nome
@@ -128,16 +136,21 @@ def salvar_plano_treino(dados_plano: dict, sessao: Session = Depends(obter_sessa
 
 
 @roteador_treinos.get("/plano-ativo")
-def obter_plano_ativo(sessao: Session = Depends(obter_sessao_bd)):
+def obter_plano_ativo(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Recupera o plano de treino atualmente ativo com identificação de fase e histórico de alterações."""
-    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
     if not plano:
-        # Se não houver plano guardado, obter perfil e gerar um padrão
-        perfil = sessao.query(PerfilUtilizador).first()
+        # Se não houver plano guardado, obter perfil limpo e gerar um padrão específico para este utilizador
+        perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
         fase = perfil.fase_atual if perfil else "bulk"
         plano_padrao = gerar_plano_treino_otimizado(dias_semana=4, tempo_sessao_minutos=60)
         sessoes_iniciais = plano_padrao.get("sessoes", [])
         plano = PlanoTreinoGuardado(
+            utilizador_id=uid,
             nome=plano_padrao.get("nome_divisao", "Plano Recomendado"),
             divisao=plano_padrao.get("nome_divisao", "Upper / Lower"),
             dias_semana=plano_padrao.get("dias_por_semana", 4),
@@ -176,9 +189,14 @@ def obter_plano_ativo(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_treinos.post("/substituir-exercicio-sessao")
-def substituir_exercicio_sessao(dados: EsquemaSubstituirExercicioPlano, sessao: Session = Depends(obter_sessao_bd)):
+def substituir_exercicio_sessao(
+    dados: EsquemaSubstituirExercicioPlano,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Substitui um exercício de uma sessão de treino no plano ativo registando o motivo clínico/biomecânico."""
-    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    plano = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
     if not plano:
         raise HTTPException(status_code=404, detail="Nenhum plano de treino ativo encontrado")
 
@@ -265,9 +283,14 @@ def substituir_exercicio_sessao(dados: EsquemaSubstituirExercicioPlano, sessao: 
 
 
 @roteador_treinos.post("/sugerir-substituicao-ia")
-async def sugerir_substituicao_exercicio_com_ia(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+async def sugerir_substituicao_exercicio_com_ia(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Recomenda 2 a 3 alternativas biomecânicas seguras quando o atleta relata desconforto ou dor num exercício."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     chave_ia = dados.get("chave_api_ia") or (perfil.chave_api_ia if perfil else None)
     prompt_custom = obter_prompt_efetivo(perfil, "substituicao_exercicio") if perfil else None
 
@@ -289,9 +312,13 @@ async def sugerir_substituicao_exercicio_com_ia(dados: dict, sessao: Session = D
 
 
 @roteador_treinos.get("/historico-fases")
-def obter_historico_fases_treino(sessao: Session = Depends(obter_sessao_bd)):
+def obter_historico_fases_treino(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o histórico de todos os planos de treino guardados em cada fase do projeto."""
-    planos = sessao.query(PlanoTreinoGuardado).order_by(PlanoTreinoGuardado.id.desc()).all()
+    uid = resolver_utilizador_id(usuario)
+    planos = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.utilizador_id == uid).order_by(PlanoTreinoGuardado.id.desc()).all()
     resultado = []
     for p in planos:
         try:
@@ -324,14 +351,19 @@ def obter_historico_fases_treino(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_treinos.post("/reativar-fase-treino")
-def reativar_fase_treino(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def reativar_fase_treino(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Permite reativar o plano de treino de uma fase anterior."""
+    uid = resolver_utilizador_id(usuario)
     plano_id = dados.get("plano_id")
-    plano_alvo = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.id == plano_id).first()
+    plano_alvo = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.id == plano_id, PlanoTreinoGuardado.utilizador_id == uid).first()
     if not plano_alvo:
         raise HTTPException(status_code=404, detail="Plano de treino não encontrado")
 
-    sessao.query(PlanoTreinoGuardado).update({"ativo": False})
+    sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.utilizador_id == uid).update({"ativo": False})
     plano_alvo.ativo = True
     plano_alvo.atualizado_em = datetime.utcnow()
 
@@ -369,9 +401,15 @@ def reativar_fase_treino(dados: dict, sessao: Session = Depends(obter_sessao_bd)
 
 
 @roteador_treinos.post("/registar-sessao")
-def registar_sessao_treino(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def registar_sessao_treino(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Grava o registo de uma sessão de treino concluída em direto."""
+    uid = resolver_utilizador_id(usuario)
     registo = RegistoTreinoExecutado(
+        utilizador_id=uid,
         sessao_nome=dados.get("sessao_nome", "Treino"),
         duracao_minutos=dados.get("duracao_minutos", 60),
         rpe_geral=dados.get("rpe_geral", 8.0),
@@ -387,13 +425,15 @@ def registar_sessao_treino(dados: dict, sessao: Session = Depends(obter_sessao_b
 @roteador_treinos.post("/recomendar-ia")
 async def recomendar_treino_com_ia(
     requisicao: EsquemaRecomendacaoTreinoIA,
-    sessao: Session = Depends(obter_sessao_bd)
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
 ):
     """
     Gera uma prescrição de treino altamente individualizada com recurso a IA (Cloud / Heurística),
     analisando o projeto atual, lesões, desproporções musculares, dias e tempo disponíveis.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     chave_api = requisicao.chave_api_ia or (perfil.chave_api_ia if perfil else None)
 
     coach = ServicoCoachIA(chave_api=chave_api)
@@ -431,10 +471,16 @@ async def recomendar_treino_com_ia(
 
 
 @roteador_treinos.get("/historico")
-def obter_historico_treinos(limite: int = 20, sessao: Session = Depends(obter_sessao_bd)):
+def obter_historico_treinos(
+    limite: int = 20,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna os últimos registos de treinos executados com cargas e repetições reais."""
+    uid = resolver_utilizador_id(usuario)
     registos = (
         sessao.query(RegistoTreinoExecutado)
+        .filter(RegistoTreinoExecutado.utilizador_id == uid)
         .order_by(RegistoTreinoExecutado.data.desc())
         .limit(limite)
         .all()
@@ -454,13 +500,18 @@ def obter_historico_treinos(limite: int = 20, sessao: Session = Depends(obter_se
 
 
 @roteador_treinos.get("/progresso-exercicios")
-def obter_progresso_todos_exercicios(sessao: Session = Depends(obter_sessao_bd)):
+def obter_progresso_todos_exercicios(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Retorna a linha do tempo e progressão de cargas de todos os exercícios já registados.
     Indexado por nome e por id para pesquisa instantânea no frontend.
     """
+    uid = resolver_utilizador_id(usuario)
     registos = (
         sessao.query(RegistoTreinoExecutado)
+        .filter(RegistoTreinoExecutado.utilizador_id == uid)
         .order_by(RegistoTreinoExecutado.data.asc())
         .all()
     )

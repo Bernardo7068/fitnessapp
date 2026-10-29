@@ -5,7 +5,10 @@ Rotas de Check-in Diário & Acompanhamento de Projeto: Motor Matemático + Coach
 import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from .ajudantes_rotas import resolver_utilizador_id, obter_ou_criar_perfil
+from .rotas_auth import obter_utilizador_opcional, ContaUtilizador
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import (
@@ -118,7 +121,7 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
     3. Guarda o registo completo de medidas e biofeedback no histórico.
     4. Opcionalmente aplica os ajustes à dieta ativa de imediato.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     chave_api = dados.chave_api_ia or (perfil.chave_api_ia if perfil else None)
 
     # 1. DIAGNÓSTICO MATEMÁTICO PURO
@@ -130,7 +133,7 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
     elif not fase_efetiva and perfil:
         fase_efetiva = perfil.fase_atual or "bulk"
 
-    ultimo_checkin_registo = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.data.desc()).first()
+    ultimo_checkin_registo = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.data.desc()).first()
 
     # Determinar peso anterior automaticamente se não fornecido
     if dados.peso_medio_anterior is not None:
@@ -232,7 +235,7 @@ async def processar_checkin_semanal(dados: EsquemaCheckInEntrada, sessao: Sessio
                                 perfil.calorias_atuais = nova_kcal
 
                                 # 2. Atualizar projeto ativo
-                                proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True).first()
+                                proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
                                 if proj_ativo:
                                     proj_ativo.fase_atual_tipo = nova_fase_tipo
                                     proj_ativo.fase_atual_nome = nova_fase_nome
@@ -476,7 +479,7 @@ def aplicar_ajustes_checkin(dados: dict, sessao: Session = Depends(obter_sessao_
     Aplica as calorias e macros recomendadas no check-in diretamente ao perfil,
     ao projeto ativo, ao plano de refeições e ao diário de consumo.
     """
-    perfil = sessao.query(PerfilUtilizador).first()
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
 
@@ -494,9 +497,13 @@ def aplicar_ajustes_checkin(dados: dict, sessao: Session = Depends(obter_sessao_
 
 
 @roteador_checkin.get("/historico")
-def obter_historico_checkins(sessao: Session = Depends(obter_sessao_bd)):
+def obter_historico_checkins(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o histórico de todos os check-ins realizados com medidas e biofeedback."""
-    registos = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.data.desc()).all()
+    uid = resolver_utilizador_id(usuario)
+    registos = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.data.desc()).all()
     lista = []
     for r in registos:
         metricas_adicionais = {}
@@ -526,7 +533,7 @@ def obter_historico_checkins(sessao: Session = Depends(obter_sessao_bd)):
 
 def calcular_status_periodico(sessao: Session) -> Dict[str, Any]:
     """Calcula o estado de periodicidade do check-up para aviso proativo ao atleta."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     cfg = {}
     if perfil and getattr(perfil, "configuracao_checkin_json", None):
         try:
@@ -538,7 +545,7 @@ def calcular_status_periodico(sessao: Session) -> Dict[str, Any]:
     dia_semana_preferido = cfg.get("dia_semana_preferido", "qualquer")
     notificacao_ativa = bool(cfg.get("notificacao_ativa", True))
 
-    ultimo_checkin = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.data.desc()).first()
+    ultimo_checkin = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.data.desc()).first()
 
     if ultimo_checkin and ultimo_checkin.data:
         dt_ultimo = ultimo_checkin.data
@@ -547,7 +554,7 @@ def calcular_status_periodico(sessao: Session) -> Dict[str, Any]:
         proximo_checkin_dt = dt_ultimo + timedelta(days=frequencia_dias)
         proximo_checkin_str = proximo_checkin_dt.strftime("%d/%m/%Y")
     else:
-        proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True).first()
+        proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
         if proj_ativo and proj_ativo.data_inicio_fase:
             try:
                 dt_inicio = datetime.fromisoformat(proj_ativo.data_inicio_fase)
@@ -614,7 +621,7 @@ def obter_status_checkin_periodico(sessao: Session = Depends(obter_sessao_bd)):
 @roteador_checkin.post("/configurar-periodo")
 def configurar_periodo_checkin(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
     """Permite ao atleta configurar o intervalo do check-in (ex: a cada 7 dias) e preferências de aviso."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     if not perfil:
         perfil = PerfilUtilizador()
         sessao.add(perfil)
@@ -640,7 +647,7 @@ def configurar_periodo_checkin(dados: dict, sessao: Session = Depends(obter_sess
 @roteador_checkin.post("/calcular-bf-navy")
 def endpoint_calcular_bf_navy(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
     """Calcula a estimativa de gordura corporal (% BF) através da fórmula científica da Marinha Americana (US Navy)."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
     sexo = dados.get("sexo") or (perfil.sexo if perfil else "masculino")
     altura_cm = float(dados.get("altura_cm") or (perfil.altura_cm if perfil else 178.0))
     cintura_cm = float(dados.get("cintura_cm", 80.0))

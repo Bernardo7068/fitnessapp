@@ -5,7 +5,10 @@ Rotas de Nutrição, Dieta Adaptativa, Prescrição com IA, Diário de Consumo e
 import json
 from datetime import datetime
 from typing import Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from .ajudantes_rotas import resolver_utilizador_id, obter_ou_criar_perfil
+from .rotas_auth import obter_utilizador_opcional, ContaUtilizador
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import PlanoDietaGuardado, PerfilUtilizador, RegistoDiarioConsumo, ProjetoFisiologico
@@ -50,12 +53,16 @@ def calcular_equivalencia(requisicao: EsquemaSubstituicaoRequisicao):
 
 
 @roteador_nutricao.get("/plano-ativo")
-def obter_plano_dieta_ativo(sessao: Session = Depends(obter_sessao_bd)):
+def obter_plano_dieta_ativo(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Obtém o plano de dieta atualmente ativo com detalhe completo de alimentos e gramas."""
-    plano = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    plano = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
     if not plano:
         # Se não existe, obter perfil para gerar automaticamente um plano inicial com alimentos concretos
-        perfil = sessao.query(PerfilUtilizador).first()
+        perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
         calorias = perfil.calorias_atuais if perfil else 2500.0
         fase = perfil.fase_atual if perfil else "bulk"
         
@@ -68,6 +75,7 @@ def obter_plano_dieta_ativo(sessao: Session = Depends(obter_sessao_bd)):
         })
 
         plano = PlanoDietaGuardado(
+            utilizador_id=uid,
             nome=resultado.get("nome_plano", "Dieta Base Adaptativa"),
             calorias=float(resultado.get("calorias_alvo", calorias)),
             proteina_g=float(resultado.get("proteina_alvo_g", 160.0)),
@@ -302,7 +310,8 @@ def _reconciliar_e_recalcular_diario(
 def obter_registo_diario(data: Optional[str] = None, sessao: Session = Depends(obter_sessao_bd)):
     """Retorna o registo de consumo diário (checks do plano e itens avulsos) reconciliado em tempo real."""
     data_str = data or datetime.utcnow().strftime("%Y-%m-%d")
-    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str).first()
+    uid = resolver_utilizador_id(usuario)
+    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     
     # Obter perfil para verificar calorias ativas do projeto
     perfil = sessao.query(PerfilUtilizador).first()
@@ -317,6 +326,7 @@ def obter_registo_diario(data: Optional[str] = None, sessao: Session = Depends(o
 
     if not registo:
         registo = RegistoDiarioConsumo(
+            utilizador_id=uid,
             data=data_str,
             calorias_alvo=alvo_calorias,
             proteina_alvo_g=alvo_proteina,
@@ -378,7 +388,8 @@ def obter_registo_diario(data: Optional[str] = None, sessao: Session = Depends(o
 def toggle_check_refeicao(dados: EsquemaToggleCheckRefeicao, sessao: Session = Depends(obter_sessao_bd)):
     """Atualiza o check de um alimento ou refeição e recalcula instantaneamente os totais diários."""
     data_str = dados.data or datetime.utcnow().strftime("%Y-%m-%d")
-    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str).first()
+    uid = resolver_utilizador_id(usuario)
+    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     if not registo:
         registo = RegistoDiarioConsumo(data=data_str)
         sessao.add(registo)
@@ -407,7 +418,8 @@ def toggle_check_refeicao(dados: EsquemaToggleCheckRefeicao, sessao: Session = D
 def adicionar_item_avulso(item: EsquemaAdicionarItemAvulso, sessao: Session = Depends(obter_sessao_bd)):
     """Registo Livre: adiciona um alimento avulso consumido ao longo do dia."""
     data_str = item.data or datetime.utcnow().strftime("%Y-%m-%d")
-    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str).first()
+    uid = resolver_utilizador_id(usuario)
+    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     if not registo:
         registo = RegistoDiarioConsumo(data=data_str)
         sessao.add(registo)
@@ -448,7 +460,8 @@ def adicionar_item_avulso(item: EsquemaAdicionarItemAvulso, sessao: Session = De
 def remover_item_avulso(item_index: int, data: Optional[str] = None, sessao: Session = Depends(obter_sessao_bd)):
     """Remove um item avulso registado livremente."""
     data_str = data or datetime.utcnow().strftime("%Y-%m-%d")
-    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str).first()
+    uid = resolver_utilizador_id(usuario)
+    registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     if not registo:
         raise HTTPException(status_code=404, detail="Registo do dia não encontrado")
 
@@ -686,9 +699,13 @@ def salvar_plano_dieta(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_nutricao.get("/historico-fases")
-def obter_historico_fases_dieta(sessao: Session = Depends(obter_sessao_bd)):
+def obter_historico_fases_dieta(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o histórico de todas as dietas guardadas em cada fase do projeto."""
-    planos = sessao.query(PlanoDietaGuardado).order_by(PlanoDietaGuardado.id.desc()).all()
+    uid = resolver_utilizador_id(usuario)
+    planos = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.utilizador_id == uid).order_by(PlanoDietaGuardado.id.desc()).all()
     resultado = []
     for p in planos:
         try:
@@ -723,14 +740,19 @@ def obter_historico_fases_dieta(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_nutricao.post("/reativar-fase-dieta")
-def reativar_fase_dieta(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def reativar_fase_dieta(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Permite reativar uma dieta de uma fase anterior."""
+    uid = resolver_utilizador_id(usuario)
     plano_id = dados.get("plano_id")
-    plano_alvo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.id == plano_id).first()
+    plano_alvo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.id == plano_id, PlanoDietaGuardado.utilizador_id == uid).first()
     if not plano_alvo:
         raise HTTPException(status_code=404, detail="Plano de dieta não encontrado")
 
-    sessao.query(PlanoDietaGuardado).update({"ativo": False})
+    sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.utilizador_id == uid).update({"ativo": False})
     plano_alvo.ativo = True
     plano_alvo.atualizado_em = datetime.utcnow()
 
@@ -832,10 +854,15 @@ async def calibrar_dieta_com_ia(dados: dict, sessao: Session = Depends(obter_ses
 
 
 @roteador_nutricao.post("/sugerir-substituicao-ia")
-async def sugerir_substituicao_alimento_com_ia(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+async def sugerir_substituicao_alimento_com_ia(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Recomenda 2 a 3 alimentos nutricionalmente parecidos para substituir um item na dieta com dose calibrada."""
-    perfil = sessao.query(PerfilUtilizador).first()
-    plano_ativo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
+    plano_ativo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
 
     chave_ia = dados.get("chave_api_ia") or (perfil.chave_api_ia if perfil else None)
     prompt_custom = obter_prompt_efetivo(perfil, "substituicao_alimento") if perfil else None

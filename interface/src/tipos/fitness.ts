@@ -616,3 +616,25 @@ export interface ComparativoEvolucaoBiohacking {
   };
   conclusao_cientifica: string;
 }
+
+export interface UtilizadorAutenticado {
+  id: number;
+  nome: string;
+  email: string;
+  papel: 'admin' | 'atleta';
+  criado_em?: string;
+  ultimo_login?: string;
+  ativo?: boolean;
+  estatisticas?: {
+    total_treinos: number;
+    total_checkins: number;
+    peso_atual?: number;
+    fase_atual?: string;
+  };
+}
+
+export interface RespostaAuth {
+  mensagem: string;
+  token: string;
+  utilizador: UtilizadorAutenticado;
+}

@@ -351,7 +351,23 @@ export const GestorBiohacking: React.FC = () => {
         </div>
       )}
 
-      {/* ==================================================================== */}
+            {/* AVISO DE RESPONSABILIDADE INDIVIDUAL E ISENÇÃO MÉDICA */}
+      <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3 text-xs text-amber-200">
+        <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <div className="font-bold text-amber-300 flex items-center gap-2">
+            <span>Aviso de Responsabilidade Individual & Isenção Médica</span>
+            <span className="px-2 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-black">
+              Informativo
+            </span>
+          </div>
+          <p className="text-amber-200/90 leading-relaxed">
+            As informações, dosagens sugeridas, mecanismos de ação e ciclos presentes neste módulo têm caráter meramente educativo e científico, baseando-se em literatura pública sobre fitoquímicos e suplementação desportiva. A utilização de qualquer substância é da exclusiva responsabilidade individual de cada utilizador. Recomenda-se vivamente consulta e acompanhamento por um médico, endocrinologista ou nutricionista antes de iniciar qualquer protocolo ou alteração metabólica.
+          </p>
+        </div>
+      </div>
+
+{/* ==================================================================== */}
       {/* VISTA 1: O MEU PROTOCOLO ATIVO */}
       {/* ==================================================================== */}
       {vistaAtiva === 'protocolo' && (

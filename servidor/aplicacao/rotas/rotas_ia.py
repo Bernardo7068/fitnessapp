@@ -1,12 +1,12 @@
 """
-Rotas de Inteligência Artificial Cloud e Configuração de Chave API.
+Rotas de Inteligência Artificial Cloud e Configuração de Chave API (Restrito a Administradores).
 """
 
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
-from ..base_dados.modelos import PerfilUtilizador
+from ..base_dados.modelos import PerfilUtilizador, ContaUtilizador
 from ..esquemas.esquemas import EsquemaConfiguracaoIA, EsquemaSalvarPromptsIA
 from ..ia_cloud.servico_coach import ServicoCoachIA
 from ..ia_cloud.prompts_ia import (
@@ -17,8 +17,9 @@ from ..ia_cloud.prompts_ia import (
     PROMPT_SISTEMA_SUBSTITUICAO_ALIMENTO,
     PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO
 )
+from .rotas_auth import obter_admin_atual, obter_utilizador_opcional
 
-roteador_ia = APIRouter(prefix="/api/ia", tags=["Inteligência Artificial Cloud"])
+roteador_ia = APIRouter(prefix="/api/ia", tags=["Inteligência Artificial Cloud & Configurações"])
 
 
 def obter_prompt_efetivo(perfil: PerfilUtilizador, tipo: str) -> str:
@@ -31,9 +32,38 @@ def obter_prompt_efetivo(perfil: PerfilUtilizador, tipo: str) -> str:
             custom_dict = {}
 
     if tipo == "coach":
-        return custom_dict.get("coach") or getattr(perfil, "prompt_sistema_nutricao", None) or PROMPT_SISTEMA_COACH
+        return custom_dict.get("coach") or (perfil.prompt_sistema_nutricao if perfil and perfil.prompt_sistema_nutricao else None) or PROMPT_SISTEMA_COACH
     elif tipo == "treinador":
-        return custom_dict.get("treinador") or getattr(perfil, "prompt_sistema_treinador", None) or PROMPT_SISTEMA_TREINADOR
+        return custom_dict.get("treinador") or (perfil.prompt_sistema_treinador if perfil and perfil.prompt_sistema_treinador else None) or PROMPT_SISTEMA_TREINADOR
+    elif tipo == "dieta":
+        return custom_dict.get("dieta") or PROMPT_SISTEMA_PRESCRICAO_DIETA
+    elif tipo == "calibracao_dieta":
+        return custom_dict.get("calibracao_dieta") or PROMPT_SISTEMA_CALIBRACAO_DIETA
+    elif tipo == "substituicao_alimento":
+        return custom_dict.get("substituicao_alimento") or PROMPT_SISTEMA_SUBSTITUICAO_ALIMENTO
+    elif tipo == "substituicao_exercicio":
+        return custom_dict.get("substituicao_exercicio") or PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO
+    return PROMPT_SISTEMA_COACH
+
+
+def obter_prompt_ativo_sistema(sessao: Session, tipo: str) -> str:
+    """Função utilitária interna para obter a versão ativa de um prompt de sistema (configurado pelo admin)."""
+    # Procura no perfil do admin (utilizador_id == 1 ou qualquer admin)
+    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == 1).first()
+    if not perfil:
+        perfil = sessao.query(PerfilUtilizador).first()
+
+    custom_dict = {}
+    if perfil and perfil.prompts_customizados_json:
+        try:
+            custom_dict = json.loads(perfil.prompts_customizados_json)
+        except Exception:
+            custom_dict = {}
+
+    if tipo == "coach":
+        return custom_dict.get("coach") or (perfil.prompt_sistema_nutricao if perfil and perfil.prompt_sistema_nutricao else None) or PROMPT_SISTEMA_COACH
+    elif tipo == "treinador":
+        return custom_dict.get("treinador") or (perfil.prompt_sistema_treinador if perfil and perfil.prompt_sistema_treinador else None) or PROMPT_SISTEMA_TREINADOR
     elif tipo == "dieta":
         return custom_dict.get("dieta") or PROMPT_SISTEMA_PRESCRICAO_DIETA
     elif tipo == "calibracao_dieta":
@@ -46,22 +76,29 @@ def obter_prompt_efetivo(perfil: PerfilUtilizador, tipo: str) -> str:
 
 
 @roteador_ia.post("/salvar-chave")
-def salvar_chave_api(dados: EsquemaConfiguracaoIA, sessao: Session = Depends(obter_sessao_bd)):
-    """Guarda a chave de API da IA Cloud no perfil do utilizador."""
-    perfil = sessao.query(PerfilUtilizador).first()
+def salvar_chave_api(
+    dados: EsquemaConfiguracaoIA,
+    admin: ContaUtilizador = Depends(obter_admin_atual),
+    sessao: Session = Depends(obter_sessao_bd)
+):
+    """Guarda a chave de API da IA Cloud (Restrito a Administradores)."""
+    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == admin.id).first()
     if not perfil:
-        perfil = PerfilUtilizador()
+        perfil = PerfilUtilizador(utilizador_id=admin.id, nome=admin.nome)
         sessao.add(perfil)
-    
+
     perfil.chave_api_ia = dados.chave_api.strip()
     sessao.commit()
     sessao.refresh(perfil)
-    return {"mensagem": "Chave API guardada com sucesso!", "configurado": True}
+    return {"mensagem": "Chave API guardada com sucesso pelo Administrador!", "configurado": True}
 
 
 @roteador_ia.post("/testar-conexao")
-async def testar_conexao_ia(dados: EsquemaConfiguracaoIA):
-    """Testa se a chave API fornecida consegue comunicar com o serviço Cloud."""
+async def testar_conexao_ia(
+    dados: EsquemaConfiguracaoIA,
+    admin: ContaUtilizador = Depends(obter_admin_atual)
+):
+    """Testa se a chave API fornecida consegue comunicar com o serviço Cloud (Restrito a Administradores)."""
     servico = ServicoCoachIA(chave_api=dados.chave_api, provedor=dados.provedor)
     dados_teste = {
         "sexo": "masculino",
@@ -86,7 +123,7 @@ async def testar_conexao_ia(dados: EsquemaConfiguracaoIA):
         resultado = await servico.obter_recomendacoes_coach(dados_teste)
         return {
             "sucesso": True,
-            "mensagem": "Comunicação com a IA Cloud estabelecida com sucesso!",
+            "mensagem": "Comunicação com o Motor Cloud estabelecida com sucesso!",
             "resposta_amostra": resultado
         }
     except Exception as e:
@@ -94,9 +131,15 @@ async def testar_conexao_ia(dados: EsquemaConfiguracaoIA):
 
 
 @roteador_ia.get("/prompts")
-def obter_prompts_ia(sessao: Session = Depends(obter_sessao_bd)):
-    """Retorna todas as diretrizes da IA (personalizadas ou padrão) e os padrões originais."""
-    perfil = sessao.query(PerfilUtilizador).first()
+def obter_prompts_ia(
+    admin: ContaUtilizador = Depends(obter_admin_atual),
+    sessao: Session = Depends(obter_sessao_bd)
+):
+    """Retorna todas as diretrizes da IA (personalizadas ou padrão) para o Administrador."""
+    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == admin.id).first()
+    if not perfil:
+        perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == 1).first()
+
     custom_dict = {}
     if perfil and perfil.prompts_customizados_json:
         try:
@@ -121,7 +164,7 @@ def obter_prompts_ia(sessao: Session = Depends(obter_sessao_bd)):
         "prompt_substituicao_alimento": subst_alim_custom or PROMPT_SISTEMA_SUBSTITUICAO_ALIMENTO,
         "prompt_substituicao_exercicio": subst_exerc_custom or PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO,
 
-        # Padrões de Fábrica
+        # Textos Padrão Imutáveis
         "padrao_coach": PROMPT_SISTEMA_COACH,
         "padrao_treinador": PROMPT_SISTEMA_TREINADOR,
         "padrao_nutricao": PROMPT_SISTEMA_COACH,
@@ -130,7 +173,7 @@ def obter_prompts_ia(sessao: Session = Depends(obter_sessao_bd)):
         "padrao_substituicao_alimento": PROMPT_SISTEMA_SUBSTITUICAO_ALIMENTO,
         "padrao_substituicao_exercicio": PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO,
 
-        # Flags de personalização
+        # Indicadores de personalização
         "customizado_coach": bool(coach_custom),
         "customizado_treinador": bool(treinador_custom),
         "customizado_nutricao": bool(coach_custom),
@@ -142,11 +185,15 @@ def obter_prompts_ia(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_ia.post("/salvar-prompts")
-def salvar_prompts_ia(dados: EsquemaSalvarPromptsIA, sessao: Session = Depends(obter_sessao_bd)):
-    """Guarda todas as diretrizes personalizadas que o Coach IA deve seguir."""
-    perfil = sessao.query(PerfilUtilizador).first()
+def salvar_prompts_ia(
+    dados: EsquemaSalvarPromptsIA,
+    admin: ContaUtilizador = Depends(obter_admin_atual),
+    sessao: Session = Depends(obter_sessao_bd)
+):
+    """Guarda diretrizes de sistema personalizadas para o Motor Científico (Restrito ao Admin)."""
+    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == admin.id).first()
     if not perfil:
-        perfil = PerfilUtilizador()
+        perfil = PerfilUtilizador(utilizador_id=admin.id, nome=admin.nome)
         sessao.add(perfil)
 
     custom_dict = {}
@@ -157,78 +204,47 @@ def salvar_prompts_ia(dados: EsquemaSalvarPromptsIA, sessao: Session = Depends(o
             custom_dict = {}
 
     if dados.prompt_coach is not None:
-        val = dados.prompt_coach.strip()
-        custom_dict["coach"] = val if val else None
-        perfil.prompt_sistema_nutricao = val if val else None
-
-    if dados.prompt_nutricao is not None and dados.prompt_coach is None:
-        val = dados.prompt_nutricao.strip()
-        custom_dict["coach"] = val if val else None
-        perfil.prompt_sistema_nutricao = val if val else None
-
+        custom_dict["coach"] = dados.prompt_coach.strip()
+        perfil.prompt_sistema_nutricao = dados.prompt_coach.strip()
     if dados.prompt_treinador is not None:
-        val = dados.prompt_treinador.strip()
-        custom_dict["treinador"] = val if val else None
-        perfil.prompt_sistema_treinador = val if val else None
-
+        custom_dict["treinador"] = dados.prompt_treinador.strip()
+        perfil.prompt_sistema_treinador = dados.prompt_treinador.strip()
     if dados.prompt_dieta is not None:
-        val = dados.prompt_dieta.strip()
-        custom_dict["dieta"] = val if val else None
-
+        custom_dict["dieta"] = dados.prompt_dieta.strip()
     if dados.prompt_calibracao_dieta is not None:
-        val = dados.prompt_calibracao_dieta.strip()
-        custom_dict["calibracao_dieta"] = val if val else None
-
+        custom_dict["calibracao_dieta"] = dados.prompt_calibracao_dieta.strip()
     if dados.prompt_substituicao_alimento is not None:
-        val = dados.prompt_substituicao_alimento.strip()
-        custom_dict["substituicao_alimento"] = val if val else None
-
+        custom_dict["substituicao_alimento"] = dados.prompt_substituicao_alimento.strip()
     if dados.prompt_substituicao_exercicio is not None:
-        val = dados.prompt_substituicao_exercicio.strip()
-        custom_dict["substituicao_exercicio"] = val if val else None
+        custom_dict["substituicao_exercicio"] = dados.prompt_substituicao_exercicio.strip()
 
     # Limpar chaves vazias
-    custom_dict = {k: v for k, v in custom_dict.items() if v}
-    perfil.prompts_customizados_json = json.dumps(custom_dict) if custom_dict else None
+    chaves_a_remover = [k for k, v in custom_dict.items() if not v]
+    for k in chaves_a_remover:
+        del custom_dict[k]
 
+    perfil.prompts_customizados_json = json.dumps(custom_dict, ensure_ascii=False)
     sessao.commit()
     sessao.refresh(perfil)
 
     return {
-        "mensagem": "Diretrizes e Prompts do Coach IA guardados com sucesso!",
-        "customizado_coach": bool(custom_dict.get("coach")),
-        "customizado_treinador": bool(custom_dict.get("treinador")),
-        "customizado_dieta": bool(custom_dict.get("dieta")),
-        "customizado_calibracao_dieta": bool(custom_dict.get("calibracao_dieta")),
-        "customizado_substituicao_alimento": bool(custom_dict.get("substituicao_alimento")),
-        "customizado_substituicao_exercicio": bool(custom_dict.get("substituicao_exercicio"))
+        "mensagem": "Diretrizes do Motor Científico atualizadas pelo Administrador com sucesso!",
+        "customizados_ativos": list(custom_dict.keys())
     }
 
 
 @roteador_ia.post("/restaurar-prompts-padrao")
-def restaurar_prompts_padrao(sessao: Session = Depends(obter_sessao_bd)):
-    """Restaura todas as diretrizes padrão de fábrica para o Coach IA."""
-    perfil = sessao.query(PerfilUtilizador).first()
+def restaurar_prompts_padrao(
+    admin: ContaUtilizador = Depends(obter_admin_atual),
+    sessao: Session = Depends(obter_sessao_bd)
+):
+    """Restaura todas as diretrizes padrão de fábrica (Restrito ao Admin)."""
+    perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == admin.id).first()
     if perfil:
+        perfil.prompts_customizados_json = "{}"
         perfil.prompt_sistema_treinador = None
         perfil.prompt_sistema_nutricao = None
-        perfil.prompts_customizados_json = None
         sessao.commit()
+        sessao.refresh(perfil)
 
-    return {
-        "mensagem": "Todas as diretrizes padrão do Coach IA foram restauradas com sucesso!",
-        "prompt_coach": PROMPT_SISTEMA_COACH,
-        "prompt_treinador": PROMPT_SISTEMA_TREINADOR,
-        "prompt_nutricao": PROMPT_SISTEMA_COACH,
-        "prompt_dieta": PROMPT_SISTEMA_PRESCRICAO_DIETA,
-        "prompt_calibracao_dieta": PROMPT_SISTEMA_CALIBRACAO_DIETA,
-        "prompt_substituicao_alimento": PROMPT_SISTEMA_SUBSTITUICAO_ALIMENTO,
-        "prompt_substituicao_exercicio": PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO,
-        "customizado_coach": False,
-        "customizado_treinador": False,
-        "customizado_nutricao": False,
-        "customizado_dieta": False,
-        "customizado_calibracao_dieta": False,
-        "customizado_substituicao_alimento": False,
-        "customizado_substituicao_exercicio": False
-    }
+    return {"mensagem": "Todas as diretrizes originais foram restauradas com sucesso!"}

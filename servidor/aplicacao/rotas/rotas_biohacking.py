@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from .ajudantes_rotas import resolver_utilizador_id, obter_ou_criar_perfil
+from .rotas_auth import obter_utilizador_opcional, ContaUtilizador
 from sqlalchemy.orm import Session
 from ..base_dados.conexao import obter_sessao_bd
 from ..base_dados.modelos import (
@@ -769,25 +772,25 @@ def adicionar_substancia_ao_catalogo(dados: dict):
 
 
 @roteador_biohacking.get("/protocolo-ativo")
-def obter_protocolo_ativo(sessao: Session = Depends(obter_sessao_bd)):
+def obter_protocolo_ativo(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o protocolo ativo atual ou prescreve um inicial sob medida."""
-    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True, ProtocoloBiohacking.utilizador_id == uid).first()
     data_hoje = datetime.utcnow().strftime("%Y-%m-%d")
 
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
 
     if not protocolo:
-        treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
-        dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
-        checkins = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.id.desc()).limit(5).all()
+        treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
+        dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
+        checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.id.desc()).limit(5).all()
 
         rec = _prescrever_stack_adaptativo(perfil, treino, checkins, dieta)
         protocolo = ProtocoloBiohacking(
+            utilizador_id=uid,
             nome=rec["nome"],
             objetivo=rec["objetivo"],
             ativo=True,
@@ -821,11 +824,16 @@ def obter_protocolo_ativo(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_biohacking.post("/salvar-protocolo")
-def salvar_protocolo(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def salvar_protocolo(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Atualiza o protocolo ativo, substâncias ou notas."""
-    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True, ProtocoloBiohacking.utilizador_id == uid).first()
     if not protocolo:
-        protocolo = ProtocoloBiohacking(ativo=True)
+        protocolo = ProtocoloBiohacking(ativo=True, utilizador_id=uid)
         sessao.add(protocolo)
 
     if "nome" in dados: protocolo.nome = dados["nome"]
@@ -841,12 +849,17 @@ def salvar_protocolo(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_biohacking.post("/marcar-toma")
-def marcar_toma_diaria(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def marcar_toma_diaria(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Marca ou desmarca a toma de uma substância para a data de hoje."""
+    uid = resolver_utilizador_id(usuario)
     substancia_id = dados.get("substancia_id")
     data_hoje = dados.get("data") or datetime.utcnow().strftime("%Y-%m-%d")
 
-    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True).first()
+    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True, ProtocoloBiohacking.utilizador_id == uid).first()
     if not protocolo:
         raise HTTPException(status_code=404, detail="Nenhum protocolo ativo encontrado")
 
@@ -873,28 +886,34 @@ def marcar_toma_diaria(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_biohacking.post("/gerar-recomendacao")
-def gerar_recomendacao(sessao: Session = Depends(obter_sessao_bd)):
+def gerar_recomendacao(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Gera uma prescrição algorítmica personalizada sem excessos."""
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-
-    treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
-    dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
-    checkins = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.id.desc()).limit(6).all()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
+    treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True, PlanoTreinoGuardado.utilizador_id == uid).first()
+    dieta = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True, PlanoDietaGuardado.utilizador_id == uid).first()
+    checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.id.desc()).limit(6).all()
 
     rec = _prescrever_stack_adaptativo(perfil, treino, checkins, dieta)
     return rec
 
 
 @roteador_biohacking.post("/registo-biofeedback")
-def registar_biofeedback(dados: dict, sessao: Session = Depends(obter_sessao_bd)):
+def registar_biofeedback(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Registo rápido diário dos 4 indicadores de vitalidade."""
+    uid = resolver_utilizador_id(usuario)
     data_hoje = dados.get("data") or datetime.utcnow().strftime("%Y-%m-%d")
     
-    registo = sessao.query(RegistoBiofeedback).filter(RegistoBiofeedback.data == data_hoje).first()
+    registo = sessao.query(RegistoBiofeedback).filter(RegistoBiofeedback.data == data_hoje, RegistoBiofeedback.utilizador_id == uid).first()
     if not registo:
-        registo = RegistoBiofeedback(data=data_hoje)
+        registo = RegistoBiofeedback(utilizador_id=uid, data=data_hoje)
         sessao.add(registo)
 
     registo.vigor_energia = int(dados.get("vigor_energia", 7))
@@ -909,9 +928,13 @@ def registar_biofeedback(dados: dict, sessao: Session = Depends(obter_sessao_bd)
 
 
 @roteador_biohacking.get("/historico-biofeedback")
-def obter_historico_biofeedback(sessao: Session = Depends(obter_sessao_bd)):
+def obter_historico_biofeedback(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna os registos dos últimos 30 dias de biofeedback."""
-    registos = sessao.query(RegistoBiofeedback).order_by(RegistoBiofeedback.data.desc()).limit(30).all()
+    uid = resolver_utilizador_id(usuario)
+    registos = sessao.query(RegistoBiofeedback).filter(RegistoBiofeedback.utilizador_id == uid).order_by(RegistoBiofeedback.data.desc()).limit(30).all()
     return [
         {
             "data": r.data,
@@ -927,16 +950,20 @@ def obter_historico_biofeedback(sessao: Session = Depends(obter_sessao_bd)):
 
 
 @roteador_biohacking.get("/comparativo-evolucao")
-def obter_comparativo_evolucao(sessao: Session = Depends(obter_sessao_bd)):
+def obter_comparativo_evolucao(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
     Análise comparativa científica:
     Cruza dados de treino e check-in nos períodos com protocolo ativo vs período base/sem protocolo.
     """
-    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True).first()
+    uid = resolver_utilizador_id(usuario)
+    protocolo = sessao.query(ProtocoloBiohacking).filter(ProtocoloBiohacking.ativo == True, ProtocoloBiohacking.utilizador_id == uid).first()
     data_inicio_prot = protocolo.data_inicio if protocolo else datetime.utcnow().strftime("%Y-%m-%d")
 
-    checkins = sessao.query(RegistoCheckIn).order_by(RegistoCheckIn.data.asc()).all()
-    biofeedbacks = sessao.query(RegistoBiofeedback).all()
+    checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).order_by(RegistoCheckIn.data.asc()).all()
+    biofeedbacks = sessao.query(RegistoBiofeedback).filter(RegistoBiofeedback.utilizador_id == uid).all()
 
     checkins_com = []
     checkins_sem = []

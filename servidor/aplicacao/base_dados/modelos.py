@@ -1,5 +1,5 @@
 """
-Modelos ORM de Base de Dados para Perfil, Treinos, Nutrição e Check-ins.
+Modelos ORM de Base de Dados para Contas, Perfil, Treinos, Nutrição, Biohacking e Check-ins.
 """
 
 from datetime import datetime
@@ -7,10 +7,25 @@ from sqlalchemy import Column, Integer, Float, String, Text, DateTime, Boolean
 from .conexao import Base
 
 
+class ContaUtilizador(Base):
+    """Conta de utilizador para autenticação e isolamento de dados."""
+    __tablename__ = "contas_utilizador"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), nullable=False)
+    email = Column(String(150), unique=True, index=True, nullable=False)
+    hash_senha = Column(String(255), nullable=False)
+    papel = Column(String(20), default="atleta")  # "admin" ou "atleta"
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    ultimo_login = Column(DateTime, nullable=True)
+
+
 class PerfilUtilizador(Base):
     __tablename__ = "perfis_utilizador"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     nome = Column(String(100), default="Atleta")
     idade = Column(Integer, default=25)
     sexo = Column(String(20), default="masculino")
@@ -42,6 +57,7 @@ class PlanoTreinoGuardado(Base):
     __tablename__ = "planos_treino"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     nome = Column(String(100), default="Plano Recomendado")
     divisao = Column(String(50), default="Upper / Lower")
     dias_semana = Column(Integer, default=4)
@@ -61,6 +77,7 @@ class PlanoDietaGuardado(Base):
     __tablename__ = "planos_dieta"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     nome = Column(String(100), default="Dieta Adaptativa")
     calorias = Column(Float, nullable=False)
     proteina_g = Column(Float, nullable=False)
@@ -82,6 +99,7 @@ class RegistoTreinoExecutado(Base):
     __tablename__ = "registos_treino"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     data = Column(DateTime, default=datetime.utcnow)
     sessao_nome = Column(String(100), nullable=False)
     duracao_minutos = Column(Integer, default=60)
@@ -94,6 +112,7 @@ class RegistoCheckIn(Base):
     __tablename__ = "registos_checkin"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     id_projeto = Column(Integer, nullable=True, index=True)
     nome_projeto = Column(String(150), nullable=True)
     data = Column(DateTime, default=datetime.utcnow)
@@ -115,6 +134,7 @@ class RegistoDiarioConsumo(Base):
     __tablename__ = "registos_diario_consumo"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     data = Column(String(10), default=lambda: datetime.utcnow().strftime("%Y-%m-%d"), index=True)
     calorias_alvo = Column(Float, default=2000.0)
     proteina_alvo_g = Column(Float, default=150.0)
@@ -134,6 +154,7 @@ class ProjetoFisiologico(Base):
     __tablename__ = "projetos_fisiologicos"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     nome = Column(String(150), nullable=False, default="Projeto de Transformação")
     descricao = Column(Text, nullable=True)
     tipo_intencao = Column(String(100), default="Transformação Corporal")
@@ -166,6 +187,7 @@ class ProtocoloBiohacking(Base):
     __tablename__ = "protocolos_biohacking"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     nome = Column(String(150), default="Protocolo de Otimização Hormonal")
     objetivo = Column(String(200), default="Testosterona Livre, Sono & Recuperação")
     ativo = Column(Boolean, default=True)
@@ -181,6 +203,7 @@ class RegistoBiofeedback(Base):
     __tablename__ = "registos_biofeedback"
 
     id = Column(Integer, primary_key=True, index=True)
+    utilizador_id = Column(Integer, nullable=True, index=True)
     data = Column(String(20), default=lambda: datetime.utcnow().strftime("%Y-%m-%d"), index=True)
     vigor_energia = Column(Integer, default=7)
     qualidade_sono = Column(Integer, default=7)
