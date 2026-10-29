@@ -1,7 +1,8 @@
 @echo off
-title Fitness App - Acesso Telemovel Global
+chcp 65001 >nul
+title BInov Fitness - Acesso Telemovel Global
 echo ==========================================================
-echo    INICIANDO FIT APP COM LINK SEGURO PARA O TELEMOVEL
+echo    INICIANDO BINOV FITNESS COM LINK SEGURO (CLOUDFLARE)
 echo ==========================================================
 echo.
 
@@ -15,11 +16,14 @@ start "Interface React (Vite)" cmd /k "cd interface && npm run dev"
 
 timeout /t 3 /nobreak >nul
 
-echo 3. A gerar link seguro direto para o teu Telemovel...
+echo 3. A gerar o Link Seguro HTTPS (Cloudflare Tunnel)...
 echo.
 echo ==========================================================
-echo  ABRE ESTE LINK NO TEU TELEMOVEL (Funciona em Wi-Fi e 4G/5G):
-echo.
-npx --yes localtunnel --port 5173 --subdomain fitness-bernardo-app
+echo  INSTRUÇÕES PARA O TELEMÓVEL:
+echo  1. Procura a caixa abaixo com o link "https://...trycloudflare.com"
+echo  2. Abre esse link no Chrome (Android) ou Safari (iPhone)
+echo  3. Toca no botão verde "Instalar BInov no Telemóvel"
 echo ==========================================================
+echo.
+npx --yes cloudflared tunnel --url http://localhost:5173
 pause
