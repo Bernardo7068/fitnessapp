@@ -8,6 +8,7 @@ import { GestorBiohacking } from './componentes/GestorBiohacking';
 import { DefinicoesIA } from './componentes/DefinicoesIA';
 import { PainelAdmin } from './componentes/PainelAdmin';
 import { EcraLogin } from './componentes/EcraLogin';
+import { BotaoInstalarPWA } from './componentes/BotaoInstalarPWA';
 import { AlertCircle, BellRing, CalendarCheck, X, ShieldAlert, Sparkles, Lock } from 'lucide-react';
 import { ServicoApi } from './servicos/api';
 import { StatusCheckinPeriodico, UtilizadorAutenticado } from './tipos/fitness';
@@ -233,6 +234,9 @@ export const Aplicacao: React.FC = () => {
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500">
         <p>BInov © 2026 • Motor Adaptativo de Treinos, Nutrição e Biohacking</p>
       </footer>
+
+      {/* Botão Flutuante de Instalação PWA */}
+      <BotaoInstalarPWA />
     </div>
   );
 };
