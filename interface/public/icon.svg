@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#022c22" />
+      <stop offset="50%" stop-color="#064e3b" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#14b8a6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Fundo Arredondado Dark Emerald -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#10b981" stroke-width="6" stroke-opacity="0.25" />
+  
+  <!-- Brilho de Fundo -->
+  <circle cx="256" cy="256" r="140" fill="#10b981" opacity="0.12" filter="url(#glow)" />
+  
+  <!-- Símbolo BInov Fitness / Dumbbell + Raio Dinâmico -->
+  <g transform="translate(256,256) scale(11) translate(-12,-12)" stroke="url(#accentGrad)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6.5 6.5 11 11" stroke-width="2.6" />
+    <path d="m21 21-1-1" />
+    <path d="m3 3 1 1" />
+    <path d="m18 22 4-4" stroke-width="2.8" />
+    <path d="m2 6 4-4" stroke-width="2.8" />
+    <path d="m3 10 7-7" stroke-width="2.4" />
+    <path d="m14 21 7-7" stroke-width="2.4" />
+  </g>
+</svg>
