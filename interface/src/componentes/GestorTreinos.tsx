@@ -882,9 +882,9 @@ export const GestorTreinos: React.FC = () => {
   const sessaoAtual = plano?.sessoes[sessaoAtivaIndex];
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-4 sm:space-y-8 pb-12">
       {/* CABEÇALHO & SINCRONIZAÇÃO COM O PROJETO */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 shadow-xl">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/60 p-3.5 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-800 shadow-xl">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider">

@@ -429,11 +429,11 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
   const proximaFaseObj = (indiceFaseAtiva >= 0 && indiceFaseAtiva < fasesExibicao.length - 1) ? fasesExibicao[indiceFaseAtiva + 1] : null;
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-4 sm:space-y-8 pb-16">
       {/* =================================================================== */}
       {/* BARRA SUPERIOR: SELETOR DE MODO (FOCO NO PROJETO vs OUTROS vs NOVO) */}
       {/* =================================================================== */}
-      <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+      <div className="bg-slate-900/80 p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-800 shadow-xl space-y-3 sm:space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider mb-2">
@@ -442,7 +442,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
             <h1 className="text-2xl md:text-3xl font-black text-white">
               {abaPrincipal === 'foco' ? (projetoEmFoco ? projetoEmFoco.nome : 'Projeto em Curso') : abaPrincipal === 'portfolio' ? 'Os Meus Projetos Fisiológicos' : 'Configurar Novo Projeto'}
             </h1>
-            <p className="text-slate-400 text-xs md:text-sm mt-0.5 max-w-3xl">
+            <p className="hidden sm:block text-slate-400 text-xs md:text-sm mt-0.5 max-w-3xl">
               {abaPrincipal === 'foco'
                 ? 'Acompanha a linha do tempo completa, metas de peso seco, calorias e periodização da tua jornada ativa.'
                 : abaPrincipal === 'portfolio'
@@ -452,7 +452,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
           </div>
 
           {/* Abas Superiores de Navegação */}
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 self-start sm:self-center shrink-0">
+          <div className="grid grid-cols-3 sm:flex items-center gap-1 sm:gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full sm:w-auto shrink-0">
             <button
               onClick={() => setAbaPrincipal('foco')}
               disabled={!projetoEmFoco}
@@ -510,7 +510,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
       {abaPrincipal === 'foco' && projetoEmFoco && (
         <div className="space-y-6 animate-fade-in">
           {/* 1. HERO BANNER DO PROJETO COM STATUS, METAS E BOTÕES DE AÇÃO */}
-          <div className={`p-6 rounded-2xl border-2 shadow-2xl relative overflow-hidden space-y-5 ${
+          <div className={`p-3.5 sm:p-6 rounded-xl sm:rounded-2xl border-2 shadow-2xl relative overflow-hidden space-y-3.5 sm:space-y-5 ${
             isProjetoAtivoNoMotor
               ? 'bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-950 border-emerald-500 shadow-emerald-950/30'
               : 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-amber-500/50 shadow-slate-950/40'
@@ -583,7 +583,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   </span>
                 </div>
                 <div>
-                  <div className="text-2xl sm:text-3xl font-black text-white">
+                  <div className="text-xl sm:text-3xl font-black text-white">
                     {pesoInicial} <span className="text-sm font-bold text-slate-400">kg</span>
                   </div>
                   <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
@@ -609,7 +609,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   </span>
                 </div>
                 <div>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-400 flex items-baseline gap-2">
+                  <div className="text-xl sm:text-3xl font-black text-emerald-400 flex items-baseline gap-2">
                     {pesoHoje} <span className="text-sm font-bold text-emerald-300">kg</span>
                     <span className="text-xs font-black px-2 py-0.5 rounded bg-emerald-500 text-slate-950 shadow-sm">
                       {isCutting
@@ -648,7 +648,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   </span>
                 </div>
                 <div>
-                  <div className="text-2xl sm:text-3xl font-black text-white flex items-baseline gap-2">
+                  <div className="text-xl sm:text-3xl font-black text-white flex items-baseline gap-2">
                     {pesoAlvoProjeto} <span className="text-sm font-bold text-amber-400">kg</span>
                     {pesoRestanteKg > 0 && (
                       <span className="text-xs font-bold text-amber-300/90">

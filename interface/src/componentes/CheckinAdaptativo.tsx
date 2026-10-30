@@ -435,15 +435,15 @@ export const CheckinAdaptativo: React.FC<CheckinAdaptativoProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 sm:space-y-6 pb-16">
       {/* CABEÇALHO & IDENTIFICAÇÃO DO PROJETO */}
-      <div className="bg-slate-900/80 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
+      <div className="bg-slate-900/80 p-3.5 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-800 space-y-3 sm:space-y-4 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider mb-2">
               <CalendarCheck className="w-4 h-4" /> Check-in & Acompanhamento de Projeto
             </div>
-            <h1 className="text-2xl md:text-3xl font-black text-white">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white">
               Check-up do Atleta & Calibração
             </h1>
             <p className="text-slate-400 text-xs md:text-sm mt-1 max-w-3xl">

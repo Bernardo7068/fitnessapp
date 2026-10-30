@@ -3,22 +3,21 @@
 @tailwind utilities;
 
 /* ==============================================================================
-   PISO MÍNIMO DE TIPOGRAFIA (12PX) EM TODA A APLICAÇÃO
-   Garante legibilidade nítida, confortável e acessível em todos os ecrãs
+   TIPOGRAFIA RESPONSIVA E ESCALONAMENTO NATIVO MOBILE
+   No telemóvel (<=640px), o tamanho base de 14px compacta proporcionalmente
+   todos os paddings, margens e textos em Tailwind (unidades rem).
    ============================================================================== */
-html, body {
+html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
-/* Proteção contra fontes microscópicas em qualquer componente */
-[class*="text-[7px]"],
-[class*="text-[8px]"],
-[class*="text-[9px]"],
-[class*="text-[10px]"],
-[class*="text-[11px]"] {
-  font-size: 12px !important;
-  line-height: 1.25rem !important;
+@media (max-width: 640px) {
+  html {
+    font-size: 13.5px; /* Redução proporcional elegante para mobile */
+  }
 }
 
 body {
@@ -26,12 +25,24 @@ body {
   min-height: 100vh;
   background-color: #020617;
   color: #f8fafc;
+  overflow-x: hidden;
+}
+
+/* Micro-etiquetas e badges em mobile mantêm proporção nítida */
+@media (max-width: 640px) {
+  [class*="text-[7px]"],
+  [class*="text-[8px]"],
+  [class*="text-[9px]"],
+  [class*="text-[10px]"] {
+    font-size: 10px;
+    line-height: 1.15;
+  }
 }
 
 /* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: #0f172a;

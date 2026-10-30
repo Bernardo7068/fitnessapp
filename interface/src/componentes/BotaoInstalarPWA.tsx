@@ -64,8 +64,8 @@ export const BotaoInstalarPWA: React.FC = () => {
     <>
       {/* BANNER FLUTUANTE DE INSTALAÇÃO NO FUNDO */}
       {!bannerFechado && (
-        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 md:max-w-md z-50 animate-bounce-in">
-          <div className="bg-slate-900/95 backdrop-blur-md border border-emerald-500/50 rounded-2xl p-4 shadow-2xl shadow-emerald-950/60 text-slate-100 flex items-center justify-between gap-3">
+        <div className="fixed bottom-16 left-3 right-3 md:left-auto md:right-6 md:bottom-6 md:max-w-md z-40 animate-bounce-in">
+          <div className="bg-slate-900/95 backdrop-blur-md border border-emerald-500/50 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-emerald-950/60 text-slate-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20 text-slate-950 font-black">
                 <Smartphone className="w-5 h-5" />

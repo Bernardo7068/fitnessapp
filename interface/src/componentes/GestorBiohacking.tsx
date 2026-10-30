@@ -294,9 +294,9 @@ export const GestorBiohacking: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 sm:space-y-6 pb-16">
       {/* CABEÇALHO & SELEÇÃO DE VISTAS */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 p-5 md:p-6 rounded-2xl border border-emerald-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xl">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 p-3.5 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl border border-emerald-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xl">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
             <Zap className="w-3.5 h-3.5" /> Biohacking & Vitalidade Endócrina

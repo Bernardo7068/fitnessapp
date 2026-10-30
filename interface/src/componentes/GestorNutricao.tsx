@@ -913,9 +913,9 @@ export const GestorNutricao: React.FC = () => {
   const pctG = Math.min(100, Math.round((consumidoG / metaG) * 100));
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 sm:space-y-6 pb-16">
       {/* CARD 1: Sincronização Estrita com o Projeto Ativo */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 p-5 rounded-2xl border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shadow-xl">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
             <CheckCircle2 className="w-3.5 h-3.5" /> Fase do Projeto Sincronizada
