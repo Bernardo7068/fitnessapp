@@ -57,20 +57,15 @@ export const Navegacao: React.FC<PropsNavegacao> = ({
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-13 sm:h-16 gap-2">
-            {/* Logo & Marca Oficial */}
+            {/* Marca Oficial (Apenas Tipografia BInov FITNESS) */}
             <div
-              className="flex items-center space-x-2.5 cursor-pointer flex-shrink-0"
+              className="flex items-center cursor-pointer flex-shrink-0 py-1"
               onClick={() => aoMudarAba('metas')}
             >
-              <img
-                src="/icon.svg"
-                alt="BInov Fitness"
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl shadow-md shadow-emerald-500/20 flex-shrink-0 object-contain hover:scale-105 transition-transform"
-              />
               <div>
-                <span className="text-base sm:text-xl font-black tracking-tight text-white flex items-center leading-none">
+                <span className="text-base sm:text-xl font-black tracking-tight text-white flex items-center leading-none hover:opacity-90 transition-opacity">
                   <span>BI</span><span className="text-emerald-400">nov</span>
-                  <span className="text-[9px] sm:text-[10px] font-extrabold tracking-widest text-slate-400 uppercase ml-1.5 px-1 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">FITNESS</span>
+                  <span className="text-[9px] sm:text-[10px] font-extrabold tracking-widest text-slate-400 uppercase ml-1.5 px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">FITNESS</span>
                 </span>
                 <p className="text-[10px] text-slate-400 font-medium hidden lg:block leading-tight mt-0.5">
                   Coach Adaptativo de Treinos e Nutrição
