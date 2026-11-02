@@ -76,6 +76,14 @@ tmp/
 *.sublime-project
 *.sublime-workspace
 
+# --- Android / Mobile Build Artifacts ---
+*.apk
+*.aab
+interface/android/.gradle/
+interface/android/build/
+interface/android/app/build/
+interface/android/local.properties
+
 # --- Sistema Operativo ---
 .DS_Store
 Thumbs.db

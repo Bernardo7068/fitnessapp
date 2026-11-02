@@ -38,11 +38,13 @@ if not exist "local.properties" (
 
 call gradlew.bat assembleDebug
 if %ERRORLEVEL% equ 0 (
+    copy /y "app\build\outputs\apk\debug\app-debug.apk" "%~dp0BInov-Fitness.apk" >nul
     echo.
     echo ========================================================
     echo   [SUCESSO] APK gerado com sucesso!
-    echo   Localização do ficheiro:
-    echo   interface\android\app\build\outputs\apk\debug\app-debug.apk
+    echo.
+    echo   Localizacao do ficheiro pronto (na pasta principal):
+    echo   BInov-Fitness.apk
     echo ========================================================
 ) else (
     echo.
