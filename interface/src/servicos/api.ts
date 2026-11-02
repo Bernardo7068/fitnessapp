@@ -24,9 +24,37 @@ import {
   RespostaAuth
 } from '../tipos/fitness';
 
-// Rota relativa direta (Same-Origin) com proxy interno no Vite.
-// Imune a alteracoes de IP da rede Wi-Fi e seguro contra exposicao de portas locais.
-const API_BASE = '/api';
+// Rota dinâmica: compatível com Navegador/PWA (/api), APK Nativo (IP da máquina) e URL customizado
+export const obterApiBase = (): string => {
+  if (typeof localStorage !== 'undefined') {
+    const salva = localStorage.getItem('binov_servidor_url');
+    if (salva && salva.trim()) {
+      const semBarra = salva.trim().replace(/\/+$/, '');
+      return semBarra.endsWith('/api') ? semBarra : `${semBarra}/api`;
+    }
+  }
+
+  // Detetar se está a correr dentro de ambiente nativo Capacitor (Android APK)
+  const isCapacitorNativo = typeof window !== 'undefined' && (
+    window.location.protocol === 'capacitor:' ||
+    (window.location.hostname === 'localhost' && window.location.port !== '5173') ||
+    Boolean((window as any)?.Capacitor) ||
+    Boolean((window.navigator as any)?.userAgent?.includes('wv'))
+  );
+
+  if (isCapacitorNativo) {
+    // Endereço fixo do computador no Wi-Fi de casa
+    return 'http://192.168.1.74:8000/api';
+  }
+
+  return '/api';
+};
+
+// Objeto com conversão automática para string, garantindo compatibilidade com todas as chamadas ${API_BASE}/...
+const API_BASE: any = {
+  toString: () => obterApiBase(),
+  valueOf: () => obterApiBase()
+};
 
 /**
  * Cliente HTTP autenticado com injeção automática de Token Bearer
@@ -937,6 +965,34 @@ export const ServicoApi = {
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('binov_desautenticado'));
+    }
+  },
+
+  obterUrlServidorAtual(): string {
+    return obterApiBase();
+  },
+
+  definirUrlServidor(url: string): void {
+    if (typeof localStorage !== 'undefined') {
+      if (!url || !url.trim()) {
+        localStorage.removeItem('binov_servidor_url');
+      } else {
+        localStorage.setItem('binov_servidor_url', url.trim());
+      }
+    }
+  },
+
+  async testarConexaoServidor(urlTestar?: string): Promise<{ ok: boolean; mensagem: string }> {
+    try {
+      const base = urlTestar ? urlTestar.trim().replace(/\/+$/, '') + (urlTestar.includes('/api') ? '' : '/api') : obterApiBase();
+      const res = await fetch(`/saude`, { method: 'GET' });
+      if (res.ok) {
+        const data = await res.json();
+        return { ok: true, mensagem: data.mensagem || 'Ligação estabelecida com sucesso!' };
+      }
+      return { ok: false, mensagem: `Servidor respondeu com codigo ` };
+    } catch (e: any) {
+      return { ok: false, mensagem: e.message || 'Não foi possível alcançar o servidor.' };
     }
   }
 };

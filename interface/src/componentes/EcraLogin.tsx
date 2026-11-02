@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, Lock, Mail, User, ShieldAlert, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, Lock, Mail, User, ShieldAlert, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck, Sparkles, Settings, Wifi } from 'lucide-react';
 import { ServicoApi } from '../servicos/api';
 import { UtilizadorAutenticado } from '../tipos/fitness';
 
@@ -16,6 +16,29 @@ export const EcraLogin: React.FC<PropsEcraLogin> = ({ aoAutenticar }) => {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
+
+  // Configuração do Endereço do Servidor (para APK / Mobile)
+  const [mostrarConfigServidor, setMostrarConfigServidor] = useState<boolean>(false);
+  const [servidorUrl, setServidorUrl] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('binov_servidor_url') || 'http://192.168.1.74:8000';
+    }
+    return 'http://192.168.1.74:8000';
+  });
+  const [statusConexao, setStatusConexao] = useState<{ testando: boolean; ok?: boolean; msg?: string }>({ testando: false });
+
+  const handleTestarConexao = async () => {
+    setStatusConexao({ testando: true });
+    ServicoApi.definirUrlServidor(servidorUrl);
+    const res = await ServicoApi.testarConexaoServidor(servidorUrl);
+    setStatusConexao({ testando: false, ok: res.ok, msg: res.mensagem });
+  };
+
+  const handleSalvarServidor = () => {
+    ServicoApi.definirUrlServidor(servidorUrl);
+    setSucesso('Endereço do servidor guardado com sucesso!');
+    setTimeout(() => setSucesso(null), 3000);
+  };
 
   const preencherAdminDemo = () => {
     setEmail('admin@binov.app');
@@ -221,6 +244,64 @@ export const EcraLogin: React.FC<PropsEcraLogin> = ({ aoAutenticar }) => {
               <span>Preencher</span>
             </button>
           </div>
+        </div>
+
+        {/* Configuração de Conexão com o Servidor (Especialmente para APK / Rede) */}
+        <div className="mt-4 pt-3 border-t border-slate-800/80 text-center">
+          <button
+            type="button"
+            onClick={() => setMostrarConfigServidor(!mostrarConfigServidor)}
+            className="text-[11px] text-slate-400 hover:text-emerald-400 transition flex items-center justify-center gap-1.5 mx-auto font-medium"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Configuração de Ligação ao Servidor</span>
+          </button>
+
+          {mostrarConfigServidor && (
+            <div className="mt-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-left space-y-2.5 animate-fade-in text-xs">
+              <label className="block text-[11px] font-bold text-slate-300">
+                Endereço IP / URL da API:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={servidorUrl}
+                  onChange={(e) => setServidorUrl(e.target.value)}
+                  placeholder="http://192.168.1.74:8000"
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestarConexao}
+                  disabled={statusConexao.testando}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0"
+                >
+                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  <span>{statusConexao.testando ? '...' : 'Testar'}</span>
+                </button>
+              </div>
+
+              {statusConexao.msg && (
+                <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                  statusConexao.ok ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' : 'bg-red-950/60 text-red-300 border border-red-500/30'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${statusConexao.ok ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span>{statusConexao.msg}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                <span>Wi-Fi Casa: <code>192.168.1.74:8000</code></span>
+                <button
+                  type="button"
+                  onClick={handleSalvarServidor}
+                  className="text-emerald-400 font-bold hover:underline"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Garantia de Isolamento */}

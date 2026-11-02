@@ -108,7 +108,7 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Configuracao de CORS: seguro e restrito a origem da app e documentacao local
+# Configuracao de CORS: seguro e compativel com PWA (Cloudflare), APK Nativo (Capacitor) e rede local
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -116,8 +116,10 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "https://localhost",
+        "capacitor://localhost",
     ],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.trycloudflare\.com)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
