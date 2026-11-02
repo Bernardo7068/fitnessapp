@@ -307,7 +307,11 @@ def _reconciliar_e_recalcular_diario(
 
 
 @roteador_nutricao.get("/diario")
-def obter_registo_diario(data: Optional[str] = None, sessao: Session = Depends(obter_sessao_bd)):
+def obter_registo_diario(
+    data: Optional[str] = None,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna o registo de consumo diário (checks do plano e itens avulsos) reconciliado em tempo real."""
     data_str = data or datetime.utcnow().strftime("%Y-%m-%d")
     uid = resolver_utilizador_id(usuario)
@@ -385,13 +389,17 @@ def obter_registo_diario(data: Optional[str] = None, sessao: Session = Depends(o
 
 
 @roteador_nutricao.post("/diario/toggle-check")
-def toggle_check_refeicao(dados: EsquemaToggleCheckRefeicao, sessao: Session = Depends(obter_sessao_bd)):
+def toggle_check_refeicao(
+    dados: EsquemaToggleCheckRefeicao,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Atualiza o check de um alimento ou refeição e recalcula instantaneamente os totais diários."""
     data_str = dados.data or datetime.utcnow().strftime("%Y-%m-%d")
     uid = resolver_utilizador_id(usuario)
     registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     if not registo:
-        registo = RegistoDiarioConsumo(data=data_str)
+        registo = RegistoDiarioConsumo(data=data_str, utilizador_id=uid)
         sessao.add(registo)
         sessao.commit()
         sessao.refresh(registo)
@@ -415,13 +423,17 @@ def toggle_check_refeicao(dados: EsquemaToggleCheckRefeicao, sessao: Session = D
 
 
 @roteador_nutricao.post("/diario/adicionar-item")
-def adicionar_item_avulso(item: EsquemaAdicionarItemAvulso, sessao: Session = Depends(obter_sessao_bd)):
+def adicionar_item_avulso(
+    item: EsquemaAdicionarItemAvulso,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Registo Livre: adiciona um alimento avulso consumido ao longo do dia."""
     data_str = item.data or datetime.utcnow().strftime("%Y-%m-%d")
     uid = resolver_utilizador_id(usuario)
     registo = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_str, RegistoDiarioConsumo.utilizador_id == uid).first()
     if not registo:
-        registo = RegistoDiarioConsumo(data=data_str)
+        registo = RegistoDiarioConsumo(data=data_str, utilizador_id=uid)
         sessao.add(registo)
         sessao.commit()
         sessao.refresh(registo)
@@ -457,7 +469,12 @@ def adicionar_item_avulso(item: EsquemaAdicionarItemAvulso, sessao: Session = De
 
 
 @roteador_nutricao.delete("/diario/remover-item")
-def remover_item_avulso(item_index: int, data: Optional[str] = None, sessao: Session = Depends(obter_sessao_bd)):
+def remover_item_avulso(
+    item_index: int,
+    data: Optional[str] = None,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Remove um item avulso registado livremente."""
     data_str = data or datetime.utcnow().strftime("%Y-%m-%d")
     uid = resolver_utilizador_id(usuario)

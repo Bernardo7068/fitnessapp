@@ -21,16 +21,19 @@ export const EcraLogin: React.FC<PropsEcraLogin> = ({ aoAutenticar }) => {
   const [mostrarConfigServidor, setMostrarConfigServidor] = useState<boolean>(false);
   const [servidorUrl, setServidorUrl] = useState<string>(() => {
     if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem('binov_servidor_url') || 'http://192.168.1.74:8000';
+      const salva = localStorage.getItem('binov_servidor_url');
+      if (salva) return salva;
     }
-    return 'http://192.168.1.74:8000';
+    return ServicoApi.obterUrlServidorAtual();
   });
   const [statusConexao, setStatusConexao] = useState<{ testando: boolean; ok?: boolean; msg?: string }>({ testando: false });
 
   const handleTestarConexao = async () => {
     setStatusConexao({ testando: true });
-    ServicoApi.definirUrlServidor(servidorUrl);
     const res = await ServicoApi.testarConexaoServidor(servidorUrl);
+    if (res.ok) {
+      ServicoApi.definirUrlServidor(servidorUrl);
+    }
     setStatusConexao({ testando: false, ok: res.ok, msg: res.mensagem });
   };
 

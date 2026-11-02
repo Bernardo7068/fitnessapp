@@ -26,6 +26,18 @@ import {
 
 // Rota dinâmica: compatível com Navegador/PWA (/api), APK Nativo (IP da máquina) e URL customizado
 export const obterApiBase = (): string => {
+  // Se não estiver em ambiente Capacitor nativo, no navegador usa sempre '/api' (proxy seguro)
+  const isCapacitorNativo = typeof window !== 'undefined' && (
+    window.location.protocol === 'capacitor:' ||
+    (window.location.hostname === 'localhost' && window.location.port !== '5173') ||
+    Boolean((window as any)?.Capacitor?.isNativePlatform?.()) ||
+    Boolean((window.navigator as any)?.userAgent?.includes('wv'))
+  );
+
+  if (!isCapacitorNativo) {
+    return '/api';
+  }
+
   if (typeof localStorage !== 'undefined') {
     const salva = localStorage.getItem('binov_servidor_url');
     if (salva && salva.trim()) {
@@ -34,20 +46,8 @@ export const obterApiBase = (): string => {
     }
   }
 
-  // Detetar se está a correr dentro de ambiente nativo Capacitor (Android APK)
-  const isCapacitorNativo = typeof window !== 'undefined' && (
-    window.location.protocol === 'capacitor:' ||
-    (window.location.hostname === 'localhost' && window.location.port !== '5173') ||
-    Boolean((window as any)?.Capacitor) ||
-    Boolean((window.navigator as any)?.userAgent?.includes('wv'))
-  );
-
-  if (isCapacitorNativo) {
-    // Endereço fixo do computador no Wi-Fi de casa
-    return 'http://192.168.1.74:8000/api';
-  }
-
-  return '/api';
+  // Endereço do túnel Cloudflare seguro ativo por omissão para o APK
+  return 'https://explanation-lot-pearl-smaller.trycloudflare.com/api';
 };
 
 // Objeto com conversão automática para string, garantindo compatibilidade com todas as chamadas ${API_BASE}/...
@@ -882,6 +882,10 @@ export const ServicoApi = {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.detail || 'Falha ao iniciar sessão');
     }
+    const cType = res.headers.get('content-type') || '';
+    if (!cType.includes('application/json')) {
+      throw new Error('O servidor respondeu com uma página web em vez de JSON. Verifica o endereço do servidor.');
+    }
     const data: RespostaAuth = await res.json();
     if (data.token) {
       localStorage.setItem('binov_token', data.token);
@@ -984,15 +988,21 @@ export const ServicoApi = {
 
   async testarConexaoServidor(urlTestar?: string): Promise<{ ok: boolean; mensagem: string }> {
     try {
-      const base = urlTestar ? urlTestar.trim().replace(/\/+$/, '') + (urlTestar.includes('/api') ? '' : '/api') : obterApiBase();
-      const res = await fetch(`/saude`, { method: 'GET' });
+      const rawBase = urlTestar && urlTestar.trim() ? urlTestar.trim() : obterApiBase();
+      const semBarra = rawBase.replace(/\/+$/, '');
+      const base = semBarra.endsWith('/api') ? semBarra : `${semBarra}/api`;
+      const res = await fetch(`${base}/saude`, { method: 'GET' });
+      const cType = res.headers.get('content-type') || '';
+      if (!cType.includes('application/json')) {
+        return { ok: false, mensagem: `O servidor respondeu com formato inválido (${res.status}). Verifica se o URL está completo (terminado em .trycloudflare.com).` };
+      }
       if (res.ok) {
         const data = await res.json();
         return { ok: true, mensagem: data.mensagem || 'Ligação estabelecida com sucesso!' };
       }
-      return { ok: false, mensagem: `Servidor respondeu com codigo ` };
+      return { ok: false, mensagem: `Servidor respondeu com código ${res.status}` };
     } catch (e: any) {
-      return { ok: false, mensagem: e.message || 'Não foi possível alcançar o servidor.' };
+      return { ok: false, mensagem: e.message || 'Não foi possível alcançar o servidor. Verifica se o URL está bem escrito.' };
     }
   }
 };
