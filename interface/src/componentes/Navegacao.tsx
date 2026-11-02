@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dumbbell, Utensils, TrendingUp, CalendarCheck, Sparkles, Activity, Zap, Shield, LogOut, User } from 'lucide-react';
+import { Dumbbell, Utensils, TrendingUp, CalendarCheck, Sparkles, Zap, Shield, LogOut, User } from 'lucide-react';
 import { UtilizadorAutenticado } from '../tipos/fitness';
 
 interface PropsNavegacao {
@@ -57,17 +57,20 @@ export const Navegacao: React.FC<PropsNavegacao> = ({
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-13 sm:h-16 gap-2">
-            {/* Logo & Marca */}
+            {/* Logo & Marca Oficial */}
             <div
               className="flex items-center space-x-2.5 cursor-pointer flex-shrink-0"
               onClick={() => aoMudarAba('metas')}
             >
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
-                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-slate-950 stroke-[2.5]" />
-              </div>
+              <img
+                src="/icon.svg"
+                alt="BInov Fitness"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl shadow-md shadow-emerald-500/20 flex-shrink-0 object-contain hover:scale-105 transition-transform"
+              />
               <div>
-                <span className="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1.5 leading-none">
-                  BInov
+                <span className="text-base sm:text-xl font-black tracking-tight text-white flex items-center leading-none">
+                  <span>BI</span><span className="text-emerald-400">nov</span>
+                  <span className="text-[9px] sm:text-[10px] font-extrabold tracking-widest text-slate-400 uppercase ml-1.5 px-1 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">FITNESS</span>
                 </span>
                 <p className="text-[10px] text-slate-400 font-medium hidden lg:block leading-tight mt-0.5">
                   Coach Adaptativo de Treinos e Nutrição

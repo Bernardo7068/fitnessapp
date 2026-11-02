@@ -104,10 +104,14 @@ export const Aplicacao: React.FC = () => {
   if (verificandoAuth) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center font-sans">
-        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center animate-pulse mb-3">
-          <Sparkles className="w-6 h-6 text-emerald-400" />
-        </div>
-        <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">A carregar BInov...</p>
+        <img
+          src="/icon.svg"
+          alt="BInov Fitness"
+          className="w-14 h-14 rounded-2xl shadow-xl shadow-emerald-500/20 animate-pulse mb-3 object-contain"
+        />
+        <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">
+          A carregar <span className="text-white">BI</span><span className="text-emerald-400">nov</span>...
+        </p>
       </div>
     );
   }
