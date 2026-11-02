@@ -103,18 +103,14 @@ export const EcraLogin: React.FC<PropsEcraLogin> = ({ aoAutenticar }) => {
 
       {/* Caixa Principal de Autenticação */}
       <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 relative z-10">
-        {/* Cabeçalho / Branding Oficial */}
+        {/* Cabeçalho / Branding Oficial com Logótipo Integrado */}
         <div className="text-center mb-6">
           <img
             src="/icon.svg"
             alt="BInov Fitness"
-            className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl sm:rounded-3xl shadow-xl shadow-emerald-500/20 mb-3.5 object-contain hover:scale-105 transition-transform"
+            className="w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl shadow-2xl shadow-emerald-500/25 mb-1 object-contain hover:scale-105 transition-transform"
           />
-          <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center">
-            <span>BI</span><span className="text-emerald-400">nov</span>
-            <span className="text-[10px] font-extrabold tracking-[0.25em] text-slate-400 uppercase ml-2 px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">FITNESS</span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-slate-400 mt-3 font-medium">
             {modo === 'login' ? 'Inicia sessão para acederes ao teu plano e evolução' : 'Cria a tua conta para começares o teu registo'}
           </p>
         </div>
