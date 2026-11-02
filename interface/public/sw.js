@@ -1,5 +1,5 @@
 // Service Worker Nativo do BInov Fitness
-const CACHE_NAME = 'binov-fitness-v1';
+const CACHE_NAME = 'binov-fitness-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
