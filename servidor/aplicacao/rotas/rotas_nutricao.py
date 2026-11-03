@@ -115,14 +115,14 @@ def obter_plano_dieta_ativo(
 
 
 @roteador_nutricao.post("/prescrever-ia")
-async def prescrever_dieta_com_ia(dados: EsquemaPrescricaoDietaIA, sessao: Session = Depends(obter_sessao_bd)):
+async def prescrever_dieta_com_ia(
+    dados: EsquemaPrescricaoDietaIA,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Gera prescrição alimentar individualizada via IA Cloud / Motor Nutricional."""
-    perfil = sessao.query(PerfilUtilizador).first()
-    if not perfil:
-        perfil = PerfilUtilizador()
-        sessao.add(perfil)
-        sessao.commit()
-        sessao.refresh(perfil)
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
 
     calorias_projeto = perfil.calorias_atuais or 2500.0
     fase_projeto = perfil.fase_atual or "bulk"
@@ -177,11 +177,12 @@ async def prescrever_dieta_com_ia(dados: EsquemaPrescricaoDietaIA, sessao: Sessi
     )
 
     # Desativar planos antigos e guardar o novo como ativo
-    sessao.query(PlanoDietaGuardado).update({"ativo": False})
+    sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.utilizador_id == uid).update({"ativo": False})
     
     proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
     refeicoes = resultado.get("refeicoes", [])
     novo_plano = PlanoDietaGuardado(
+        utilizador_id=uid,
         nome=resultado.get("nome_plano", "Dieta Adaptativa IA"),
         id_projeto=proj_ativo.id if proj_ativo else None,
         nome_projeto=proj_ativo.nome if proj_ativo else None,
@@ -237,9 +238,13 @@ async def prescrever_dieta_com_ia(dados: EsquemaPrescricaoDietaIA, sessao: Sessi
 
 
 @roteador_nutricao.get("/preferencias")
-def obter_preferencias_nutricao(sessao: Session = Depends(obter_sessao_bd)):
+def obter_preferencias_nutricao(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """Retorna as preferências alimentares salvas do utilizador."""
-    perfil = sessao.query(PerfilUtilizador).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
     if not perfil or not perfil.preferencias_alimentares_json:
         return {
             "alimentos_preferidos": "Arroz, batata, aveia, frango, carne picada, ovos, iogurte, fruta, azeite",
