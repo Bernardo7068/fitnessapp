@@ -1229,8 +1229,8 @@ class ServicoCoachIA:
             "difícil" in dificeis
         )
 
-        # Distribuição de macronutrientes da fase
-        peso_ref = 78.0
+        # Distribuição de macronutrientes da fase baseada no peso real do atleta
+        peso_ref = float(dados_dieta.get("peso_atual") or 75.0)
         if "cut" in fase or "definicao" in fase:
             proteina_alvo = round(peso_ref * 2.2, 1)  # 2.2 g/kg em corte para blindar massa magra
             gordura_alvo = round(peso_ref * 0.75, 1)  # ~58g
@@ -1515,7 +1515,28 @@ class ServicoCoachIA:
                 "alimentos": itens_alimento
             })
 
-        # Recalcular totais diários reais
+        # Calibração estrita com o projeto ativo:
+        # Re-escalar milimetricamente as gramagens dos alimentos para que a soma real
+        # bata com rigor as calorias e macronutrientes exigidos pelo projeto (+/- 5 a 10 kcal).
+        kcal_soma_bruta = sum(r["calorias"] for r in refeicoes_geradas)
+        if kcal_soma_bruta > 0 and abs(kcal_soma_bruta - calorias) > 10:
+            fator_calorias = calorias / kcal_soma_bruta
+            for r in refeicoes_geradas:
+                for item in r.get("alimentos", []):
+                    gramas_originais = item.get("gramas", 50.0)
+                    nova_g = max(5.0, round(gramas_originais * fator_calorias, 0))
+                    ratio = nova_g / gramas_originais if gramas_originais > 0 else 1.0
+                    item["gramas"] = float(nova_g)
+                    item["calorias"] = round(item["calorias"] * ratio, 1)
+                    item["proteina_g"] = round(item["proteina_g"] * ratio, 1)
+                    item["hidratos_g"] = round(item["hidratos_g"] * ratio, 1)
+                    item["gordura_g"] = round(item["gordura_g"] * ratio, 1)
+                r["calorias"] = round(sum(it["calorias"] for it in r["alimentos"]), 1)
+                r["proteina_g"] = round(sum(it["proteina_g"] for it in r["alimentos"]), 1)
+                r["hidratos_g"] = round(sum(it["hidratos_g"] for it in r["alimentos"]), 1)
+                r["gordura_g"] = round(sum(it["gordura_g"] for it in r["alimentos"]), 1)
+
+        # Totais diários calibrados com o projeto
         calorias_finais = round(sum(r["calorias"] for r in refeicoes_geradas), 1)
         proteina_final = round(sum(r["proteina_g"] for r in refeicoes_geradas), 1)
         hidratos_final = round(sum(r["hidratos_g"] for r in refeicoes_geradas), 1)

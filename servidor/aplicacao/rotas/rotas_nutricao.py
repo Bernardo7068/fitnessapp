@@ -124,23 +124,52 @@ async def prescrever_dieta_com_ia(
     uid = resolver_utilizador_id(usuario)
     perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
 
-    calorias_projeto = perfil.calorias_atuais or 2500.0
-    fase_projeto = perfil.fase_atual or "bulk"
-    nome_fase = ""
+    # 1. Obter o projeto ativo prioritário na base de dados
+    proj_ativo = sessao.query(ProjetoFisiologico).filter(
+        ProjetoFisiologico.ativo == True,
+        ProjetoFisiologico.utilizador_id == uid
+    ).first()
 
-    # Se há projeto ativo no perfil, ler dele
-    if perfil.projeto_ativo_json:
+    calorias_projeto = None
+    fase_projeto = None
+    nome_fase = ""
+    peso_atleta = perfil.peso_atual or (proj_ativo.peso_inicial_kg if proj_ativo else 75.0)
+
+    if proj_ativo:
+        fase_projeto = proj_ativo.fase_atual_tipo
+        nome_fase = proj_ativo.fase_atual_nome
         try:
-            proj = json.loads(perfil.projeto_ativo_json)
-            fase_projeto = proj.get("fase_tipo", fase_projeto)
-            nome_fase = proj.get("nome_fase", "")
-            calorias_projeto = float(proj.get("calorias_diarias", calorias_projeto))
+            fases_lista = json.loads(proj_ativo.fases_json or "[]")
+            for f in fases_lista:
+                if f.get("tipo") == proj_ativo.fase_atual_tipo or f.get("nome_exibicao") == proj_ativo.fase_atual_nome or f.get("nome") == proj_ativo.fase_atual_nome:
+                    if f.get("calorias_diarias"):
+                        calorias_projeto = float(f.get("calorias_diarias"))
+                    break
+            if not calorias_projeto and fases_lista and fases_lista[0].get("calorias_diarias"):
+                calorias_projeto = float(fases_lista[0].get("calorias_diarias"))
         except Exception:
             pass
 
+    if not calorias_projeto and perfil.projeto_ativo_json:
+        try:
+            p_json = json.loads(perfil.projeto_ativo_json)
+            calorias_projeto = float(p_json.get("calorias_diarias") or p_json.get("calorias_alvo") or 0)
+            if not fase_projeto:
+                fase_projeto = p_json.get("fase_tipo") or p_json.get("tipo_fase")
+            if not nome_fase:
+                nome_fase = p_json.get("nome_fase", "")
+        except Exception:
+            pass
+
+    if not calorias_projeto:
+        calorias_projeto = perfil.calorias_atuais or 2500.0
+    if not fase_projeto:
+        fase_projeto = perfil.fase_atual or "bulk"
+
+    # Prioridade de calorias: respeita o que o projeto ativo exige com os ajustes do atleta
     calorias_finais = float(dados.calorias_diarias or calorias_projeto)
     fase_final = dados.fase_projeto or fase_projeto
-    nome_fase_final = dados.nome_fase_projeto or nome_fase
+    nome_fase_final = dados.nome_fase_projeto or nome_fase or f"Fase {fase_final.title()}"
 
     # Guardar preferências alimentares no perfil
     prefs = {
@@ -158,6 +187,7 @@ async def prescrever_dieta_com_ia(
         "calorias_diarias": calorias_finais,
         "fase_projeto": fase_final,
         "nome_fase_projeto": nome_fase_final,
+        "peso_atual": peso_atleta,
         "alimentos_preferidos": dados.alimentos_preferidos or "",
         "alimentos_evitados": dados.alimentos_evitados or "",
         "numero_refeicoes": dados.numero_refeicoes,
