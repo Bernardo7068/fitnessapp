@@ -8,6 +8,7 @@ import { GestorBiohacking } from './componentes/GestorBiohacking';
 import { DefinicoesIA } from './componentes/DefinicoesIA';
 import { PainelAdmin } from './componentes/PainelAdmin';
 import { EcraLogin } from './componentes/EcraLogin';
+import { PainelPerfil } from './componentes/PainelPerfil';
 import { BotaoInstalarPWA } from './componentes/BotaoInstalarPWA';
 import { AlertCircle, BellRing, CalendarCheck, X, ShieldAlert, Sparkles, Lock } from 'lucide-react';
 import { ServicoApi } from './servicos/api';
@@ -189,6 +190,7 @@ export const Aplicacao: React.FC = () => {
         checkinPendente={Boolean(statusCheckin?.checkin_pendente)}
         utilizador={utilizador}
         aoTerminarSessao={handleLogout}
+        aoAbrirPerfil={() => setAbaAtiva('perfil')}
       />
 
       {/* Conteúdo Principal (pb-24 garante que a barra inferior não esconde o fim da página em mobile) */}
@@ -210,6 +212,14 @@ export const Aplicacao: React.FC = () => {
           />
         )}
         {abaAtiva === 'biohacking' && <GestorBiohacking />}
+        {abaAtiva === 'perfil' && (
+          <PainelPerfil
+            utilizador={utilizador}
+            aoAtualizarUtilizador={setUtilizador}
+            aoFechar={() => setAbaAtiva('metas')}
+            aoTerminarSessao={handleLogout}
+          />
+        )}
 
         {/* Abas Restritas ao Administrador */}
         {abaAtiva === 'ia' && (

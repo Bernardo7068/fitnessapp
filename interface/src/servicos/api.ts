@@ -47,7 +47,7 @@ export const obterApiBase = (): string => {
   }
 
   // Endereço do túnel Cloudflare seguro ativo por omissão para o APK
-  return 'https://explanation-lot-pearl-smaller.trycloudflare.com/api';
+  return 'https://senators-jersey-political-pursuit.trycloudflare.com/api';
 };
 
 // Objeto com conversão automática para string, garantindo compatibilidade com todas as chamadas ${API_BASE}/...
@@ -90,6 +90,46 @@ export const ServicoApi = {
     });
     if (!res.ok) throw new Error('Falha ao atualizar perfil');
     return res.json();
+  },
+
+  async obterResumoCarreira(): Promise<{
+    membro_desde: string;
+    membro_desde_formatado: string;
+    dias_ativo: number;
+    semanas_ativo: number;
+    total_treinos: number;
+    total_checkins: number;
+    total_projetos: number;
+    projetos_concluidos: number;
+    nome_projeto_ativo: string;
+    fase_atual: string;
+  }> {
+    const res = await fetchComAuth(`${API_BASE}/perfil/carreira`);
+    if (!res.ok) throw new Error('Falha ao obter resumo de carreira');
+    return res.json();
+  },
+
+  async exportarDadosAtleta(): Promise<any> {
+    const res = await fetchComAuth(`${API_BASE}/perfil/exportar`);
+    if (!res.ok) throw new Error('Falha ao exportar dados');
+    return res.json();
+  },
+
+  async atualizarConta(dados: { nome?: string; senha_atual?: string; nova_senha?: string }): Promise<{ mensagem: string; utilizador: any }> {
+    const res = await fetchComAuth(`${API_BASE}/auth/atualizar-conta`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Falha ao atualizar dados da conta');
+    }
+    const data = await res.json();
+    if (data.utilizador && typeof localStorage !== 'undefined') {
+      localStorage.setItem('binov_utilizador', JSON.stringify(data.utilizador));
+    }
+    return data;
   },
 
   async calcularProjecao(dados: {

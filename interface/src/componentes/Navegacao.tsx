@@ -9,6 +9,7 @@ interface PropsNavegacao {
   checkinPendente?: boolean;
   utilizador?: UtilizadorAutenticado | null;
   aoTerminarSessao?: () => void;
+  aoAbrirPerfil?: () => void;
 }
 
 interface ItemNav {
@@ -25,7 +26,8 @@ export const Navegacao: React.FC<PropsNavegacao> = ({
   temChaveIA,
   checkinPendente = false,
   utilizador,
-  aoTerminarSessao
+  aoTerminarSessao,
+  aoAbrirPerfil
 }) => {
   const eAdmin = utilizador?.papel === 'admin';
 
@@ -111,7 +113,16 @@ export const Navegacao: React.FC<PropsNavegacao> = ({
             {/* Informação do Utilizador & Botão de Sair */}
             <div className="flex items-center gap-2 flex-shrink-0">
               {utilizador && (
-                <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-950/70 border border-slate-800 rounded-xl px-2 sm:px-2.5 py-1 sm:py-1.5">
+                <button
+                  type="button"
+                  onClick={aoAbrirPerfil}
+                  title="Ver Perfil do Atleta"
+                  className={`flex items-center gap-1.5 sm:gap-2 bg-slate-950/70 border rounded-xl px-2 sm:px-2.5 py-1 sm:py-1.5 transition text-left cursor-pointer active:scale-95 ${
+                    abaAtiva === 'perfil'
+                      ? 'border-emerald-500 bg-emerald-500/10 shadow-sm shadow-emerald-500/20'
+                      : 'border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900'
+                  }`}
+                >
                   <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-xs font-black ${
                     eAdmin ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   }`}>
@@ -127,7 +138,7 @@ export const Navegacao: React.FC<PropsNavegacao> = ({
                       {eAdmin ? 'Admin' : 'Atleta'}
                     </span>
                   </div>
-                </div>
+                </button>
               )}
 
               {aoTerminarSessao && (

@@ -88,3 +88,4 @@ interface/android/local.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+local.properties

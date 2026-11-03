@@ -1141,3 +1141,103 @@ def reanalisar_memoria_ia(
         "treino": json.loads(perfil.memoria_treino_ia_json or "{}"),
         "nutricao": json.loads(perfil.memoria_nutricao_ia_json or "{}")
     }
+
+
+
+@roteador_perfil.get("/carreira")
+def obter_resumo_carreira(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
+    """Retorna métricas globais de adesão e carreira do atleta na plataforma."""
+    uid = resolver_utilizador_id(usuario)
+    conta = sessao.query(ContaUtilizador).filter(ContaUtilizador.id == uid).first() if uid else None
+    perfil = obter_ou_criar_perfil(sessao, uid)
+
+    total_treinos = sessao.query(RegistoTreinoExecutado).filter(RegistoTreinoExecutado.utilizador_id == uid).count()
+    total_checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).count()
+    projetos = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.utilizador_id == uid).all()
+
+    total_projetos = len(projetos)
+    projetos_concluidos = sum(1 for p in projetos if p.status == "concluido")
+    projeto_ativo = next((p for p in projetos if p.status == "ativo"), None)
+
+    data_inicio = conta.criado_em if (conta and conta.criado_em) else datetime.utcnow()
+    dias_ativo = max(1, (datetime.utcnow() - data_inicio).days)
+    semanas_ativo = max(1, round(dias_ativo / 7))
+
+    return {
+        "membro_desde": data_inicio.strftime("%Y-%m-%d"),
+        "membro_desde_formatado": data_inicio.strftime("%d/%m/%Y"),
+        "dias_ativo": dias_ativo,
+        "semanas_ativo": semanas_ativo,
+        "total_treinos": total_treinos,
+        "total_checkins": total_checkins,
+        "total_projetos": total_projetos,
+        "projetos_concluidos": projetos_concluidos,
+        "nome_projeto_ativo": projeto_ativo.nome if projeto_ativo else "Sem projeto ativo",
+        "fase_atual": perfil.fase_atual or "manutencao"
+    }
+
+
+@roteador_perfil.get("/exportar")
+def exportar_dados_completos(
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
+    """Gera um backup estruturado em JSON com todo o histórico do atleta."""
+    uid = resolver_utilizador_id(usuario)
+    conta = sessao.query(ContaUtilizador).filter(ContaUtilizador.id == uid).first() if uid else None
+    perfil = obter_ou_criar_perfil(sessao, uid)
+
+    treinos = sessao.query(RegistoTreinoExecutado).filter(RegistoTreinoExecutado.utilizador_id == uid).all()
+    checkins = sessao.query(RegistoCheckIn).filter(RegistoCheckIn.utilizador_id == uid).all()
+    projetos = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.utilizador_id == uid).all()
+
+    return {
+        "versao_exportacao": "1.0",
+        "plataforma": "BInov Fitness",
+        "data_exportacao": datetime.utcnow().isoformat(),
+        "atleta": {
+            "id": conta.id if conta else uid,
+            "nome": conta.nome if conta else perfil.nome,
+            "email": conta.email if conta else None,
+            "membro_desde": conta.criado_em.isoformat() if (conta and conta.criado_em) else None
+        },
+        "perfil_biometrico": {
+            "idade": perfil.idade,
+            "sexo": perfil.sexo,
+            "altura_cm": perfil.altura_cm,
+            "peso_atual": perfil.peso_atual,
+            "bf_atual": perfil.bf_atual,
+            "nivel_experiencia": perfil.nivel_experiencia,
+            "nivel_atividade": perfil.nivel_atividade,
+            "dias_treino_semana": perfil.dias_treino_semana,
+            "tempo_sessao_minutos": perfil.tempo_sessao_minutos,
+            "fase_atual": perfil.fase_atual,
+            "calorias_atuais": perfil.calorias_atuais
+        },
+        "estatisticas": {
+            "total_treinos": len(treinos),
+            "total_checkins": len(checkins),
+            "total_projetos": len(projetos)
+        },
+        "historico_checkins": [
+            {
+                "id": c.id,
+                "data": c.data.strftime("%Y-%m-%d") if getattr(c, "data", None) else None,
+                "peso_medio": getattr(c, "peso_medio", None),
+                "fase": getattr(c, "fase_atual", None),
+                "adesao": getattr(c, "adesao_percentual", None)
+            } for c in checkins
+        ],
+        "projetos": [
+            {
+                "id": p.id,
+                "nome": p.nome,
+                "tipo_intencao": getattr(p, "tipo_intencao", None),
+                "status": getattr(p, "status", "ativo"),
+                "peso_alvo_kg": getattr(p, "peso_alvo_kg", None)
+            } for p in projetos
+        ]
+    }

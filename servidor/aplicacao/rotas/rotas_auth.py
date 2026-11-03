@@ -38,6 +38,12 @@ class EsquemaAlterarPapel(BaseModel):
     papel: str  # "admin" ou "atleta"
 
 
+class EsquemaAtualizarConta(BaseModel):
+    nome: Optional[str] = None
+    senha_atual: Optional[str] = None
+    nova_senha: Optional[str] = None
+
+
 # ==============================================================================
 # Dependências de Autenticação
 # ==============================================================================
@@ -223,6 +229,52 @@ def obter_meu_usuario(utilizador: ContaUtilizador = Depends(obter_utilizador_atu
         "papel": utilizador.papel,
         "criado_em": utilizador.criado_em.isoformat() if utilizador.criado_em else None,
         "ultimo_login": utilizador.ultimo_login.isoformat() if utilizador.ultimo_login else None
+    }
+
+
+@roteador_auth.put("/atualizar-conta")
+def atualizar_dados_conta(
+    dados: EsquemaAtualizarConta,
+    utilizador: ContaUtilizador = Depends(obter_utilizador_atual),
+    sessao: Session = Depends(obter_sessao_bd)
+):
+    """Permite ao utilizador autenticado atualizar o seu nome e/ou alterar a sua palavra-passe."""
+    if dados.nome and dados.nome.strip():
+        utilizador.nome = dados.nome.strip()
+        perfil = sessao.query(PerfilUtilizador).filter(PerfilUtilizador.utilizador_id == utilizador.id).first()
+        if perfil:
+            perfil.nome = utilizador.nome
+
+    if dados.nova_senha:
+        if not dados.senha_atual:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="É necessário introduzir a palavra-passe atual para definir uma nova."
+            )
+        if not verificar_senha(dados.senha_atual, utilizador.hash_senha):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A palavra-passe atual está incorreta."
+            )
+        if len(dados.nova_senha) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A nova palavra-passe deve ter pelo menos 6 caracteres."
+            )
+        utilizador.hash_senha = gerar_hash_senha(dados.nova_senha)
+
+    sessao.commit()
+    sessao.refresh(utilizador)
+
+    return {
+        "mensagem": "Dados da conta atualizados com sucesso!",
+        "utilizador": {
+            "id": utilizador.id,
+            "nome": utilizador.nome,
+            "email": utilizador.email,
+            "papel": utilizador.papel,
+            "criado_em": utilizador.criado_em.isoformat() if utilizador.criado_em else None
+        }
     }
 
 
