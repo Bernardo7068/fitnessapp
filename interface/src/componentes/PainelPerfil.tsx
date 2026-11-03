@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   User, Shield, Calendar, Award, Dumbbell, CalendarCheck, Target,
-  Zap, Save, Lock, Download, CheckCircle2, AlertCircle, Eye, EyeOff,
-  Wifi, Settings, LogOut, ArrowLeft, RefreshCw, Activity, Sparkles
+  Zap, Save, Lock, CheckCircle2, AlertCircle, Eye, EyeOff,
+  LogOut, ArrowLeft, Activity
 } from 'lucide-react';
 import { ServicoApi } from '../servicos/api';
 import { UtilizadorAutenticado, PerfilUtilizador } from '../tipos/fitness';
@@ -33,7 +33,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
   aoFechar,
   aoTerminarSessao
 }) => {
-  const [abaAtiva, setAbaAtiva] = useState<'biometria' | 'conta' | 'sistema'>('biometria');
+  const [abaAtiva, setAbaAtiva] = useState<'biometria' | 'conta'>('biometria');
   const [carregando, setCarregando] = useState(true);
   const [sucesso, setSucesso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -60,13 +60,6 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [salvandoConta, setSalvandoConta] = useState(false);
   const [salvandoBio, setSalvandoBio] = useState(false);
-
-  // Configuração de Servidor
-  const [servidorUrl, setServidorUrl] = useState<string>(() => {
-    return ServicoApi.obterUrlServidorAtual();
-  });
-  const [statusConexao, setStatusConexao] = useState<{ testando: boolean; ok?: boolean; msg?: string }>({ testando: false });
-  const [exportando, setExportando] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -96,7 +89,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
       if (resCarreira) {
         setCarreira(resCarreira);
       }
-    } catch (e: any) {
+    } catch {
       setErro('Não foi possível carregar todos os dados do perfil.');
     } finally {
       setCarregando(false);
@@ -162,37 +155,6 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
     }
   };
 
-  const handleTestarConexao = async () => {
-    setStatusConexao({ testando: true });
-    const res = await ServicoApi.testarConexaoServidor(servidorUrl);
-    if (res.ok) {
-      ServicoApi.definirUrlServidor(servidorUrl);
-    }
-    setStatusConexao({ testando: false, ok: res.ok, msg: res.mensagem });
-  };
-
-  const handleExportarBackup = async () => {
-    setExportando(true);
-    try {
-      const dados = await ServicoApi.exportarDadosAtleta();
-      const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `BInov_Backup_${utilizador.nome.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      setSucesso('Cópia de segurança exportada para transferência!');
-      setTimeout(() => setSucesso(null), 4000);
-    } catch (e: any) {
-      setErro('Erro ao gerar cópia de segurança.');
-    } finally {
-      setExportando(false);
-    }
-  };
-
   const eAdmin = utilizador.papel === 'admin';
   const inicial = (utilizador.nome || 'A').charAt(0).toUpperCase();
 
@@ -202,7 +164,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
       <div className="flex items-center justify-between">
         <button
           onClick={aoFechar}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-bold transition active:scale-95"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-bold transition active:scale-95 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 text-emerald-400" />
           <span>Voltar à Aplicação</span>
@@ -213,13 +175,13 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
         </span>
       </div>
 
-      {/* Hero Card: Informação do Atleta & Resumo Global */}
+      {/* Hero Card: Informação do Atleta & Resumo de Carreira */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        {/* Glow de Fundo */}
+        {/* Efeito Glow */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10 text-center sm:text-left">
-          {/* Avatar Grande */}
+          {/* Avatar com Inicial */}
           <div className="relative">
             <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl flex items-center justify-center font-black text-3xl shadow-xl ${
               eAdmin
@@ -255,11 +217,11 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
             <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Atleta desde: <strong className="text-slate-200">{carreira?.membro_desde_formatado || 'Recente'}</strong></span>
+                <span>Membro desde: <strong className="text-slate-200">{carreira?.membro_desde_formatado || 'Recente'}</strong></span>
               </span>
               <span className="text-slate-700 hidden sm:inline">•</span>
               <span className="text-emerald-400 font-medium">
-                {carreira?.semanas_ativo || 1} {carreira?.semanas_ativo === 1 ? 'semana' : 'semanas'} de adesão
+                {carreira?.semanas_ativo || 1} {carreira?.semanas_ativo === 1 ? 'semana' : 'semanas'} de consistência
               </span>
             </div>
           </div>
@@ -309,7 +271,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
         </div>
       </div>
 
-      {/* Mensagens de Feedback */}
+      {/* Feedback de Operação */}
       {sucesso && (
         <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2.5 animate-fade-in shadow-lg">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -324,12 +286,12 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
         </div>
       )}
 
-      {/* Abas de Navegação Interna */}
-      <div className="flex bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5 gap-1">
+      {/* Navegação entre Separadores */}
+      <div className="flex bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5 gap-2">
         <button
           type="button"
           onClick={() => setAbaAtiva('biometria')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             abaAtiva === 'biometria'
               ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
               : 'text-slate-400 hover:text-white'
@@ -342,7 +304,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
         <button
           type="button"
           onClick={() => setAbaAtiva('conta')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             abaAtiva === 'conta'
               ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
               : 'text-slate-400 hover:text-white'
@@ -351,31 +313,20 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
           <Lock className="w-4 h-4" />
           <span>Conta & Segurança</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setAbaAtiva('sistema')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
-            abaAtiva === 'sistema'
-              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          <span>Sistema & Backup</span>
-        </button>
       </div>
 
-      {/* Conteúdo da Aba 1: Biometria & Parâmetros Fixos */}
+      {/* ================================================================= */}
+      {/* SEPARADOR 1: BIOMETRIA BASE                                       */}
+      {/* ================================================================= */}
       {abaAtiva === 'biometria' && (
         <form onSubmit={handleSalvarBiometria} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-800 pb-3">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Parâmetros Biológicos e Estilo de Vida</span>
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span>Constantes Fisiológicas do Atleta</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Estes dados são a base do cálculo da tua Taxa Metabólica Basal (TMB) e das prescrições de volume de treino.
+              Parâmetros fixos utilizados pelo motor científico para calcular a tua taxa metabólica basal e limites adaptativos.
             </p>
           </div>
 
@@ -385,23 +336,22 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
               <input
                 type="number"
                 min="14"
-                max="100"
-                value={perfil.idade ?? ''}
-                onChange={(e) => setPerfil({ ...perfil, idade: parseInt(e.target.value) || 0 })}
+                max="95"
+                value={perfil.idade ?? 25}
+                onChange={(e) => setPerfil({ ...perfil, idade: parseInt(e.target.value) || 25 })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                required
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">Sexo Biológico</label>
               <select
-                value={perfil.sexo || 'masculino'}
-                onChange={(e) => setPerfil({ ...perfil, sexo: e.target.value })}
+                value={perfil.sexo ?? 'masculino'}
+                onChange={(e) => setPerfil({ ...perfil, sexo: e.target.value as 'masculino' | 'feminino' })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
-                <option value="masculino">Masculino</option>
-                <option value="feminino">Feminino</option>
+                <option value="masculino">Masculino (Fórmula Mifflin-St Jeor)</option>
+                <option value="feminino">Feminino (Fórmula Mifflin-St Jeor)</option>
               </select>
             </div>
 
@@ -409,42 +359,40 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
               <label className="block text-xs font-bold text-slate-300 mb-1.5">Altura (cm)</label>
               <input
                 type="number"
-                step="0.5"
-                min="100"
-                max="250"
-                value={perfil.altura_cm ?? ''}
-                onChange={(e) => setPerfil({ ...perfil, altura_cm: parseFloat(e.target.value) || 0 })}
+                min="120"
+                max="230"
+                value={perfil.altura_cm ?? 175}
+                onChange={(e) => setPerfil({ ...perfil, altura_cm: parseFloat(e.target.value) || 175 })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                required
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">Nível de Experiência em Musculação</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">Experiência com Cargas</label>
               <select
-                value={perfil.nivel_experiencia || 'intermediario'}
-                onChange={(e) => setPerfil({ ...perfil, nivel_experiencia: e.target.value })}
+                value={perfil.nivel_experiencia ?? 'intermediario'}
+                onChange={(e) => setPerfil({ ...perfil, nivel_experiencia: e.target.value as any })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
                 <option value="iniciante">Iniciante (&lt; 1 ano de treino consistente)</option>
                 <option value="intermediario">Intermédio (1 a 3 anos de treino)</option>
-                <option value="avancado">Avançado (3+ anos de treino consistente)</option>
+                <option value="avancado">Avançado (&gt; 3 anos com periodização)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">Nível de Atividade Diária (fora do ginásio)</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">Rotina Diária Geral (NEAT)</label>
               <select
-                value={perfil.nivel_atividade || 'moderado'}
-                onChange={(e) => setPerfil({ ...perfil, nivel_atividade: e.target.value })}
+                value={perfil.nivel_atividade ?? 'moderado'}
+                onChange={(e) => setPerfil({ ...perfil, nivel_atividade: e.target.value as any })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
-                <option value="sedentario">Sedentário (trabalho de secretária, poucos passos)</option>
-                <option value="ligeiro">Ligeiro (trabalho leve, 5.000 a 7.000 passos/dia)</option>
-                <option value="moderado">Moderado (ativo, 8.000 a 11.000 passos/dia)</option>
-                <option value="muito_ativo">Muito Ativo (trabalho braçal ou 12.000+ passos/dia)</option>
+                <option value="sedentario">Sedentário (Trabalho de secretária, poucos passos)</option>
+                <option value="leve">Levemente Ativo (Trabalho sentado + caminhadas)</option>
+                <option value="moderado">Moderadamente Ativo (Trabalho em pé / ativo)</option>
+                <option value="muito_ativo">Muito Ativo (Trabalho braçal / muito movimento)</option>
               </select>
             </div>
           </div>
@@ -480,7 +428,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
             <button
               type="submit"
               disabled={salvandoBio}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-50"
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>{salvandoBio ? 'A guardar...' : 'Guardar Dados Biométricos'}</span>
@@ -489,13 +437,15 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
         </form>
       )}
 
-      {/* Conteúdo da Aba 2: Conta & Segurança */}
+      {/* ================================================================= */}
+      {/* SEPARADOR 2: CONTA, SEGURANÇA & SESSÃO                            */}
+      {/* ================================================================= */}
       {abaAtiva === 'conta' && (
         <form onSubmit={handleSalvarConta} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-800 pb-3">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Lock className="w-4 h-4 text-emerald-400" />
-              <span>Credenciais e Acesso à Plataforma</span>
+              <span>Acesso e Credenciais</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Altera o teu nome de atleta ou atualiza a tua palavra-passe de segurança.
@@ -522,7 +472,7 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
                 disabled
                 className="w-full bg-slate-950/50 border border-slate-800/80 rounded-xl px-3 py-2.5 text-xs text-slate-500 cursor-not-allowed font-mono"
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">O email identifica a tua conta e é fixo.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">O email identifica a tua conta de forma permanente.</span>
             </div>
           </div>
 
@@ -539,13 +489,13 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
                     type={mostrarSenha ? 'text' : 'password'}
                     value={senhaAtual}
                     onChange={(e) => setSenhaAtual(e.target.value)}
-                    placeholder="Deixa em branco se não quiseres mudar a senha"
+                    placeholder="Deixa em branco se não quiseres alterar a senha"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                   <button
                     type="button"
                     onClick={() => setMostrarSenha(!mostrarSenha)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
                   >
                     {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -578,113 +528,33 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end">
+          <div className="pt-2 flex justify-end">
             <button
               type="submit"
               disabled={salvandoConta}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-50"
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>{salvandoConta ? 'A atualizar...' : 'Guardar Alterações da Conta'}</span>
             </button>
           </div>
-        </form>
-      )}
 
-      {/* Conteúdo da Aba 3: Sistema, Backup & Exportação */}
-      {abaAtiva === 'sistema' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
-          <div className="border-b border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span>Cópia de Segurança e Ligação ao Servidor</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Exporta todos os teus dados registados para backup e gere o endereço da API.
-            </p>
-          </div>
-
-          {/* Exportação Completa */}
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <Save className="w-4 h-4 text-emerald-400" />
-                <span>Exportar Todo o Histórico de Atleta (JSON)</span>
-              </h4>
-              <p className="text-xs text-slate-400 max-w-xl">
-                Gera um ficheiro estruturado com todos os teus dados: projetos, check-ins, pesos, treinos e perfil. Os teus dados pertencem-te a 100%.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleExportarBackup}
-              disabled={exportando}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border border-slate-700 active:scale-95 disabled:opacity-50"
-            >
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span>{exportando ? 'A gerar...' : 'Descarregar Backup'}</span>
-            </button>
-          </div>
-
-          {/* Ligação ao Servidor (IP / Cloudflare) */}
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Wifi className="w-4 h-4 text-teal-400" />
-                  <span>Endereço de Conexão com a API</span>
-                </h4>
-                <p className="text-xs text-slate-400">
-                  URL onde a aplicação envia e recebe os dados em tempo real.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={servidorUrl}
-                onChange={(e) => setServidorUrl(e.target.value)}
-                placeholder="https://...trycloudflare.com/api"
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={handleTestarConexao}
-                disabled={statusConexao.testando}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 border border-slate-700"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${statusConexao.testando ? 'animate-spin' : ''}`} />
-                <span>{statusConexao.testando ? 'A testar...' : 'Testar & Guardar'}</span>
-              </button>
-            </div>
-
-            {statusConexao.msg && (
-              <div className={`p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 ${
-                statusConexao.ok ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' : 'bg-red-950/60 text-red-300 border border-red-500/30'
-              }`}>
-                <span className={`w-2 h-2 rounded-full ${statusConexao.ok ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                <span>{statusConexao.msg}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Terminar Sessão */}
-          <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          {/* Secção de Encerrar Sessão */}
+          <div className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <span className="text-xs font-bold text-slate-300 block">Encerrar Sessão no Dispositivo</span>
-              <span className="text-[11px] text-slate-500">Irás voltar ao ecrã de início de sessão.</span>
+              <span className="text-xs font-bold text-slate-300 block">Encerrar Sessão</span>
+              <span className="text-[11px] text-slate-500">Irás sair desta conta neste dispositivo.</span>
             </div>
             <button
               type="button"
               onClick={aoTerminarSessao}
-              className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition flex items-center gap-2 active:scale-95"
+              className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition flex items-center gap-2 active:scale-95 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Terminar Sessão</span>
             </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );
