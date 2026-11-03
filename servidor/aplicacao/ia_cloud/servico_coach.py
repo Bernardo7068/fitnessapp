@@ -1,3 +1,4 @@
+import re
 """
 Serviço de Integração com IA Cloud (Google Gemini / OpenAI).
 Gera recomendações qualitativas avançadas (vitaminas, micronutrientes, cardio e substituições de exercícios).
@@ -608,11 +609,45 @@ class ServicoCoachIA:
         else:
             analise_plano_anterior = "Plano elaborado do zero de acordo com a tua biomecânica e disponibilidade."
 
+        # Deteção e priorização exaustiva de TODOS os grupos musculares nos pontos fracos
+        pf_texto = str(dados_treino.get("desproporcoes_pontos_fracos", "")).lower()
+        pf_palavras = set(re.findall(r'\b\w+\b', pf_texto))
+
+        # 1. BRAÇOS (Bíceps, Tríceps, Antebraços, Braquial)
+        chaves_bracos = {"braco", "bracos", "braço", "braços", "bicep", "biceps", "bícep", "bíceps", "tricep", "triceps", "trícep", "tríceps", "antebraco", "antebraço", "braquial"}
+        foco_bracos = bool(chaves_bracos.intersection(pf_palavras)) or any(k in pf_texto for k in ["braco", "braço", "bicep", "tricep", "braquial", "antebraço"])
+
+        # 2. PERNAS / MEMBROS INFERIORES
+        chaves_pernas = {"perna", "pernas", "quadricep", "quadriceps", "quadrícep", "quadríceps", "coxa", "coxas", "isquio", "isquios", "isquiotibial", "isquiotibiais", "femoral", "femurais"}
+        foco_pernas = bool(chaves_pernas.intersection(pf_palavras)) or any(k in pf_texto for k in ["perna", "coxa", "quadricep", "isquio", "femoral", "membros inferiores", "membro inferior"])
+
+        # 3. GLÚTEOS
+        chaves_gluteos = {"gluteo", "gluteos", "glúteo", "glúteos", "bumbum", "gluteal"}
+        foco_gluteos = bool(chaves_gluteos.intersection(pf_palavras)) or any(k in pf_texto for k in ["gluteo", "glúteo", "bumbum"])
+
+        # 4. GÉMEOS / PANTURRILHAS
+        chaves_panturrilhas = {"gemeo", "gemeos", "gémeo", "gémeos", "panturrilha", "panturrilhas", "panturrilhas", "panturrilha", "soleo", "sóleo", "gastrocnemio", "gastrocnémio"}
+        foco_panturrilhas = bool(chaves_panturrilhas.intersection(pf_palavras)) or any(k in pf_texto for k in ["gemeo", "gémeo", "panturrilha", "sóleo", "gastrocn"])
+
+        # 5. PEITORAL / PEITO (REGRA: só ativa peito se disser explicitamente peito ou peitoral! Nunca apenas 'superior')
+        tem_peito = any(k in pf_texto for k in ["peito", "peitoral", "tórax", "torax"])
+        foco_peito_superior = tem_peito and any(k in pf_texto for k in ["superior", "inclinad", "clavicular", "alto", "cima"])
+        foco_peito_geral = tem_peito and not foco_peito_superior
+
+        # 6. OMBROS / DELTOIDES
+        foco_ombros = any(k in pf_texto for k in ["ombro", "deltoid", "deltóid", "lateral"])
+
+        # 7. COSTAS / DORSAIS / TRAPÉZIO
+        foco_costas = any(k in pf_texto for k in ["costa", "dorsal", "trapezi", "trapézi", "asa", "largura", "espessura"])
+
+        # 8. ABDÓMEN / CORE
+        foco_core = any(k in pf_texto for k in ["abdom", "core", "lombar", "prancha", "oblíquo", "obliquo"])
+
         # Volume e número de exercícios diferenciados por patamar mecânico
         s_composto_base = 4
         s_secundario = 3 if fase == "cut" else 4
         s_isolador = 3
-        s_braco = 2 if fase == "cut" else 3
+        s_braco = (3 if fase == "cut" else 4) if foco_bracos else (2 if fase == "cut" else 3)
         s_detalhe = 2
         max_ex = 4 if duracao <= 45 else (5 if duracao <= 65 else 6)
         tipo_divisao = str(dados_treino.get("tipo_divisao_preferida", "personalizada")).lower()
@@ -627,7 +662,7 @@ class ServicoCoachIA:
                 "para diminuir a compressão no espaço subacromial. Eliminado desenvolvimento pesado acima da cabeça."
             )
         else:
-            ex_supino = "supino_inclinado_halteres" if ("peito" in pontos_fracos or "superior" in pontos_fracos) else "supino_reto_barra"
+            ex_supino = "supino_inclinado_halteres" if foco_peito_superior else "supino_reto_barra"
             ex_desenvolvimento = "desenvolvimento_halteres"
 
         if "lombar" in lesoes or "coluna" in lesoes:
@@ -651,16 +686,41 @@ class ServicoCoachIA:
             ex_agachamento = "agachamento_livre"
             ex_posterior = "peso_morto_romeno"
 
-        # Priorização de pontos fracos
+
+        # Estruturação dinâmica das diretrizes de pontos fracos
         ajustes_fracos = []
-        if "peito" in pontos_fracos or "superior" in pontos_fracos:
-            ajustes_fracos.append("• Ponto Fraco (Peitoral Superior): Início dos treinos de tronco com Supino Inclinado e Crossover Inclinado no ângulo de 30º.")
-        if "ombro" in pontos_fracos or "lateral" in pontos_fracos or "deltoide" in pontos_fracos:
-            ajustes_fracos.append("• Ponto Fraco (Deltoides): Elevações laterais colocadas no início da sessão com rotação de cabos e halteres para máxima largura do tronco.")
-        if "gluteo" in pontos_fracos or "pernas" in pontos_fracos:
-            ajustes_fracos.append("• Ponto Fraco (Pernas/Glúteos): Inclusão de Elevação Pélvica / Hip Thrust e Agachamento Búlgaro com pico de contração de 2 segundos.")
+        if foco_bracos:
+            s_braco = 3 if fase == "cut" else 4
+            ajustes_fracos.append("• Ponto Fraco (Braços - Bíceps & Tríceps): Priorização de volume e sobrecarga progressiva nos flexores e extensores do cotovelo (ênfase em Curl Martelo, Barra W e Tríceps Corda/Testa com 3-4 séries de alta intensidade e pico de contração de 1.5s).")
+
+        if foco_pernas:
+            ajustes_fracos.append("• Ponto Fraco (Membros Inferiores / Pernas): Estruturação de cadência excêntrica lenta (3s) em agachamento/leg press para maximizar tensão mecânica nas pernas, com ênfase em amplitude profunda e isolamento da cadeia posterior (RDL / Flexora).")
+
+        if foco_gluteos:
+            ajustes_fracos.append("• Ponto Fraco (Glúteos): Inclusão prioritária de Hip Thrust com barra pesada, agachamento búlgaro inclinado e pico de contração de 2 segundos no ponto de máxima ativação dos glúteos.")
+
+        if foco_panturrilhas:
+            ajustes_fracos.append("• Ponto Fraco (Gémeos / Panturrilhas): Elevação de gémeos com pausa estrita de 2 segundos no ponto de alongamento máximo para eliminar a elasticidade do tendão de Aquiles e recrutar 100% de fibras musculares.")
+
+        if foco_peito_superior:
+            ajustes_fracos.append("• Ponto Fraco (Peitoral Superior / Clavicular): Início das sessões de tronco com Supino Inclinado com Halteres e Crossover Inclinado no ângulo de 30º para enfatizar as fibras claviculares do peitoral.")
+        elif foco_peito_geral:
+            ajustes_fracos.append("• Ponto Fraco (Peitoral Geral): Priorização de sobrecarga mecânica na adução horizontal com supino e crucifixo em amplitude ótima e retração escapular.")
+
+        if foco_ombros:
+            ajustes_fracos.append("• Ponto Fraco (Deltoides / Ombros): Elevações laterais colocadas estrategicamente com rotação de cabos e halteres para máxima largura do tronco e foco na cabeça lateral do ombro.")
+
+        if foco_costas:
+            ajustes_fracos.append("• Ponto Fraco (Costas & Dorsais): Estímulo balanceado de puxadas verticais para largura dorsal (V-Taper) e remadas pesadas apoiadas para espessura e densidade dos romboides e trapézio.")
+
+        if foco_core:
+            ajustes_fracos.append("• Ponto Fraco (Abdómen & Core): Inclusão de exercícios anti-extensão e flexão resistida do tronco (prancha dinâmica e elevação de pernas suspensa) para definição e estabilidade da cintura.")
+
         if not ajustes_fracos:
-            ajustes_fracos.append("• Equilíbrio Muscular Geral: Distribuição simétrica de volume entre agonistas e antagonistas (peito/costas, quadríceps/isquiotibiais).")
+            if pf_texto.strip() and pf_texto.strip() not in ["nenhum", "nenhuma", "não", "nao", "nada"]:
+                ajustes_fracos.append(f"• Foco Personalizado do Atleta: Análise aplicada às indicações fornecidas ('{pf_texto.strip()}'), com calibragem dinâmica de volume para garantir harmonia muscular.")
+            else:
+                ajustes_fracos.append("• Equilíbrio Muscular Geral: Distribuição simétrica de volume entre agonistas e antagonistas (peito/costas, quadríceps/isquiotibiais, bíceps/tríceps).")
 
         # Gerar sessões adaptadas rigorosamente aos dias e patamares mecânicos
         sessoes = []

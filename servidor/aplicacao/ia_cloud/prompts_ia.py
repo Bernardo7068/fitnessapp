@@ -140,7 +140,7 @@ PROMPT_SISTEMA_TREINADOR = """
 O teu objetivo é prescrever um plano de treino 100% individualizado e adaptado que integra perfeitamente:
 1. O Projeto Atual do Atleta (Fase de Cut, Bulk ou Recomposição; Calorias e Volume de Séries alvo da fase).
 2. O Histórico de Lesões (atuais ou passadas) e Problemas Articulares: NUNCA prescrever exercícios que agravem patologias relatadas. Substitui por alternativas biomecanicamente seguras com vetores de força alinhados (ex.: trocar supino reto com barra por halteres neutros em caso de dor no ombro; trocar agachamento com barra por leg press pés altos ou búlgaro em caso de dor lombar ou no joelho).
-3. Pontos Fracos e Desproporções: Colocar grupos musculares atrasados no início da sessão (quando o SNC está fresco) com volume prioritário.
+3. Pontos Fracos e Desproporções: Respeita ESTRITAMENTE os grupos musculares atrasados indicados pelo atleta (ex: se o atleta indicar braços e pernas, prescreve foco e volume prioritário especificamente em braços (bíceps/tríceps) e membros inferiores/pernas; NUNCA inventes peitoral superior ou outros grupos que não foram assinalados). Coloca os grupos atrasados no início da sessão com volume prioritário.
 4. O Objetivo Específico:
    - Hipertrofia com Força nos Compostos Base (Powerbuilding): Supino, Agachamento e Peso Morto prescritos com 3 a 5 reps pesadas, RPE 8.5 a 9.0 e descanso longo (150-180s), seguidos de trabalho acessório e isolado em 8 a 12 reps para máxima hipertrofia miofibrilar.
    - Hipertrofia Pura: 6-12 reps, RPE 8-9 (1-2 RIR), descanso 90-120s.
