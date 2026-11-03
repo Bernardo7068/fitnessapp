@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { ServicoApi } from '../servicos/api';
 import { PainelMemoriaIA } from './PainelMemoriaIA';
+import { PainelPreferenciasNutricao } from './PainelPreferenciasNutricao';
 import {
   PlanoDietaCompleto,
   AlimentoCatalogo,
@@ -477,6 +478,7 @@ export const GestorNutricao: React.FC = () => {
         refeicoes: plano.refeicoes
       });
       setPlano(res.plano);
+      ServicoApi.salvarPreferenciasNutricao(preferenciasIA).catch((e) => console.warn('Erro ao guardar preferências:', e));
       setMensagemSucesso('Todas as alterações e alimentos do plano foram guardados com sucesso!');
       setTimeout(() => setMensagemSucesso(''), 5000);
     } catch (err: any) {
@@ -972,6 +974,12 @@ export const GestorNutricao: React.FC = () => {
 
       {/* PAINEL DE MEMÓRIA & DIAGNÓSTICO CONTÍNUO DA IA */}
       <PainelMemoriaIA tipo="nutricao" />
+
+      {/* PAINEL DE PREFERÊNCIAS ALIMENTARES & RESTRIÇÕES DO ATLETA */}
+      <PainelPreferenciasNutricao
+        preferencias={preferenciasIA}
+        aoAtualizarPreferencias={(novas) => setPreferenciasIA(novas)}
+      />
 
       {mensagemSucesso && (
         <div className="p-4 bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 rounded-xl flex items-center gap-3 text-sm animate-fade-in shadow-md">

@@ -267,6 +267,27 @@ async def prescrever_dieta_com_ia(
     }
 
 
+@roteador_nutricao.post("/preferencias")
+def salvar_preferencias_nutricao(
+    dados: dict,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
+    """Guarda permanentemente as preferências alimentares, gostos e alergias do atleta."""
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
+    prefs = {
+        "alimentos_preferidos": dados.get("alimentos_preferidos", ""),
+        "alimentos_evitados": dados.get("alimentos_evitados", ""),
+        "numero_refeicoes": int(dados.get("numero_refeicoes", 4)),
+        "horario_treino": dados.get("horario_treino", "tarde"),
+        "habitos_apetite": dados.get("habitos_apetite", ""),
+        "alimentos_dificeis": dados.get("alimentos_dificeis", "")
+    }
+    perfil.preferencias_alimentares_json = json.dumps(prefs)
+    sessao.commit()
+    return {"mensagem": "Preferências alimentares guardadas com sucesso!", "preferencias": prefs}
+
 @roteador_nutricao.get("/preferencias")
 def obter_preferencias_nutricao(
     sessao: Session = Depends(obter_sessao_bd),

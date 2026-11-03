@@ -594,6 +594,16 @@ export const ServicoApi = {
     return res.json();
   },
 
+  async salvarPreferenciasNutricao(dados: Partial<PreferenciasAlimentares>): Promise<{ mensagem: string; preferencias: PreferenciasAlimentares }> {
+    const res = await fetchComAuth(`${API_BASE}/nutricao/preferencias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados)
+    });
+    if (!res.ok) throw new Error('Falha ao guardar preferências nutricionais');
+    return res.json();
+  },
+
   async obterRegistoDiarioConsumo(data?: string): Promise<RegistoDiarioConsumo> {
     const url = data ? `${API_BASE}/nutricao/diario?data=${data}` : `${API_BASE}/nutricao/diario`;
     const res = await fetchComAuth(url);
