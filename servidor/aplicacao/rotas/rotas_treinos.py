@@ -77,7 +77,11 @@ def salvar_plano_treino(
         sessao.add(plano)
 
     proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
-    if proj_ativo and not plano.id_projeto:
+    if dados_plano.get("id_projeto"):
+        plano.id_projeto = dados_plano["id_projeto"]
+        if dados_plano.get("nome_projeto"):
+            plano.nome_projeto = dados_plano["nome_projeto"]
+    elif proj_ativo:
         plano.id_projeto = proj_ativo.id
         plano.nome_projeto = proj_ativo.nome
 

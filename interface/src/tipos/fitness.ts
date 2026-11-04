@@ -56,6 +56,7 @@ export interface FaseProjeto {
   descricao_estrategia: string;
   foco_treino?: string;
   taxa_semanal_alvo_kg?: number;
+  rpe_alvo?: number;
 }
 
 export interface RelatorioProjetoMetas {
@@ -79,6 +80,7 @@ export interface RelatorioProjetoMetas {
   bloqueio_bulk_por_bf?: boolean;
   taxa_semanal_alvo_kg?: number;
   fases: FaseProjeto[];
+  dossie_inicial?: any;
 }
 
 export interface ProjetoFisiologicoItem {

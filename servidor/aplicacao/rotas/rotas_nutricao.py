@@ -711,7 +711,11 @@ def salvar_plano_dieta(
         sessao.add(plano)
 
     proj_ativo = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.ativo == True, ProjetoFisiologico.utilizador_id == uid).first()
-    if proj_ativo and not plano.id_projeto:
+    if dados.get("id_projeto"):
+        plano.id_projeto = dados["id_projeto"]
+        if dados.get("nome_projeto"):
+            plano.nome_projeto = dados["nome_projeto"]
+    elif proj_ativo:
         plano.id_projeto = proj_ativo.id
         plano.nome_projeto = proj_ativo.nome
 
