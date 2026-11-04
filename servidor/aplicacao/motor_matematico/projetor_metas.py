@@ -398,22 +398,40 @@ def projetar_trajetoria_meta(
         tem_paragem_ou_lesao = any(k in obs_lower for k in [
             "parado", "parada", "estive parado", "meses sem treinar", "tempo sem treinar",
             "voltar a treinar", "retorno", "lesao", "lesão", "acromio", "acromioclavicular",
-            "readaptacao", "readaptação", "recuperar", "descondicionado"
+            "readaptacao", "readaptação", "recuperar", "descondicionado", "reabilita",
+            "reabilitar", "reabilitacao", "reabilitação", "fisioterapia", "tendinite", "bursite"
         ])
         tem_acromio = any(k in obs_lower for k in ["acromio", "acromioclavicular", "clavicular"])
 
-        # ESTRATÉGIA 1: RETORNO AOS TREINOS & READAPTAÇÃO PÓS-LESÃO
+        # ESTRATÉGIA 1: RETORNO AOS TREINOS & READAPTAÇÃO PÓS-LESÃO (COM OU SEM RECOMPOSIÇÃO INICIAL)
         if estrategia_inicial in ["retorno_reabilitacao", "retorno_reabilitacao_bulk"] or tem_paragem_ou_lesao:
             detalhe_clinico = " (atenção especial à articulação acromioclavicular)" if tem_acromio else ""
-            diagnostico = (
-                f"Intenção: Readaptação Neuromuscular Pós-Lesão/Paragem e Construção Muscular ({peso_atual} kg -> {peso_alvo} kg). "
-                f"Contexto individual considerado: '{observacoes_contexto}'. "
-                f"O motor introduz uma Fase 1 de transição e fortalecimento tendinoso{detalhe_clinico} "
-                f"no peso atual para restaurar colagénio, vascularização e coordenação motora antes de aplicar superávit de bulk."
-            )
+            eh_recomp_combinada = (estrategia_inicial == "recomposicao")
 
-            # Fase 1: Readaptação Neuromuscular
-            semanas_readapt = 5
+            if eh_recomp_combinada:
+                diagnostico = (
+                    f"Intenção: Síntese de Recomposição Inicial (Priming) + Readaptação Neuromuscular e Lean Bulk ({peso_atual} kg -> {peso_alvo} kg). "
+                    f"Contexto individual considerado: '{observacoes_contexto}'. "
+                    f"O motor unificou os dois objetivos na Fase 1: 6 semanas no peso atual para recomposição corporal "
+                    f"(ganho de massa magra por memória muscular e redução de gordura em manutenção calórica) sob protocolo protegido{detalhe_clinico} "
+                    f"com RPE ≤ 7.0 e cadência excêntrica 3-0-2-0, preparando as estruturas para a progressão segura do Lean Bulk."
+                )
+                nome_fase1 = f"Fase 1: Readaptação & Recomposição Inicial ({peso_cursor} kg Estáveis)"
+                semanas_readapt = 6
+                bf_fase1_fim = round(max(bf_alvo, bf_cursor - 1.0), 1)
+                desc_fase1 = "Recomposição isocalórica com recuperação articular: ganho de tônus e queima de gordura sem sobrecarga mecânica pesada."
+            else:
+                diagnostico = (
+                    f"Intenção: Readaptação Neuromuscular Pós-Lesão/Paragem e Construção Muscular ({peso_atual} kg -> {peso_alvo} kg). "
+                    f"Contexto individual considerado: '{observacoes_contexto}'. "
+                    f"O motor introduz uma Fase 1 de transição e fortalecimento tendinoso{detalhe_clinico} "
+                    f"no peso atual para restaurar colagénio, vascularização e coordenação motora antes de aplicar superávit de bulk."
+                )
+                nome_fase1 = f"Fase 1: Readaptação Neuromuscular & Proteção Articular ({peso_cursor} kg Estáveis)"
+                semanas_readapt = 5
+                bf_fase1_fim = bf_cursor
+                desc_fase1 = "Período de transição indispensável após paragem/lesão. Calorias normocalóricas (+100 kcal) para reativação anabólica sem fadiga articular."
+
             tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
             calorias_f1 = round(tdee_f1 + 100.0, 0)
             foco_readapt = (
@@ -422,27 +440,30 @@ def projetar_trajetoria_meta(
                 if tem_acromio else
                 "Reativação motora e vascularização tendinosa: RPE contido em 7.0, cadência 3-0-2-0."
             )
+            if eh_recomp_combinada:
+                foco_readapt += " Estímulo isocalórico seguro para recomposição muscular."
 
             fases.append(FaseProjeto(
                 numero_fase=fase_num,
-                tipo="readaptacao_retorno",
-                nome_exibicao=f"Fase 1: Readaptação Neuromuscular & Proteção Articular ({peso_cursor} kg Estáveis)",
+                tipo="readaptacao_recomposicao" if eh_recomp_combinada else "readaptacao_retorno",
+                nome_exibicao=nome_fase1,
                 duracao_semanas=semanas_readapt,
                 peso_inicio_kg=peso_cursor,
                 peso_fim_estimado_kg=peso_cursor,
-                bf_fim_estimado=bf_cursor,
+                bf_fim_estimado=bf_fase1_fim,
                 calorias_diarias=calorias_f1,
                 macros={
-                    "proteina_g": round(peso_cursor * 2.1, 1),
+                    "proteina_g": round(peso_cursor * 2.2, 1),
                     "gordura_g": round(peso_cursor * gordura_fator, 1),
-                    "hidratos_g": round((calorias_f1 - (peso_cursor * 2.1 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "hidratos_g": round((calorias_f1 - (peso_cursor * 2.2 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
                     "fibras_g": 30.0
                 },
                 cardio_minutos_semana=75,
                 series_trabalho_semana=12,
-                descricao_estrategia=f"Período de transição indispensável após paragem/lesão. Calorias normocalóricas (+100 kcal) para reativação anabólica sem fadiga articular.",
+                descricao_estrategia=desc_fase1,
                 foco_treino=foco_readapt
             ))
+            bf_cursor = bf_fase1_fim
             semanas_acumuladas += semanas_readapt
             fase_num += 1
 
