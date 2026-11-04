@@ -188,6 +188,8 @@ async def prescrever_dieta_com_ia(
         "fase_projeto": fase_final,
         "nome_fase_projeto": nome_fase_final,
         "peso_atual": peso_atleta,
+        "sexo": perfil.sexo if perfil else "masculino",
+        "idade": perfil.idade if perfil else 25,
         "alimentos_preferidos": dados.alimentos_preferidos or "",
         "alimentos_evitados": dados.alimentos_evitados or "",
         "numero_refeicoes": dados.numero_refeicoes,

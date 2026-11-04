@@ -17,8 +17,8 @@ class EsquemaPerfilEntrada(BaseModel):
     bf_alvo: float = Field(10.0, ge=4.0, le=40.0)
     nivel_experiencia: str = "intermediario"  # "iniciante", "intermediario", "avancado"
     nivel_atividade: str = "moderado"
-    dias_treino_semana: int = Field(4, ge=2, le=6)
-    tempo_sessao_minutos: int = Field(60, ge=30, le=120)
+    dias_treino_semana: int = Field(4, ge=0, le=7)
+    tempo_sessao_minutos: int = Field(60, ge=0, le=180)
     fase_atual: Optional[str] = "bulk"
     calorias_atuais: Optional[float] = 2600.0
     projeto_ativo_json: Optional[str] = None
@@ -132,7 +132,7 @@ class EsquemaRecomendacaoTreinoIA(BaseModel):
     atividades_secundarias: Optional[str] = ""  # ex: "Boxe 1x por semana, Corrida 2x por semana"
     cadencia_descanso: Optional[str] = "dias_fixos"  # "dias_fixos", "2_treino_1_descanso", "3_treino_1_descanso", "dias_alternados"
     plano_atual_ou_anterior: Optional[str] = ""  # Plano que o utilizador já faz/fazia para auditoria e reestruturação
-    dias_semana: int = Field(4, ge=2, le=6)
+    dias_semana: int = Field(4, ge=2, le=7)
     duracao_minutos: int = Field(60, ge=30, le=120)
     tipo_divisao_preferida: Optional[str] = "personalizada"
     fase_projeto: Optional[str] = "cut"

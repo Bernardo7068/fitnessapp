@@ -57,12 +57,12 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
   const [ativarImediatamente, setAtivarImediatamente] = useState<boolean>(true);
 
   // Parâmetros Fisiológicos do Atleta
-  const [pesoAtual, setPesoAtual] = useState<number>(78);
-  const [pesoAlvo, setPesoAlvo] = useState<number>(85);
-  const [bfAtual, setBfAtual] = useState<number>(15);
-  const [bfAlvo, setBfAlvo] = useState<number>(10);
-  const [altura, setAltura] = useState<number>(178);
-  const [idade, setIdade] = useState<number>(25);
+  const [pesoAtual, setPesoAtual] = useState<number | ''>(78);
+  const [pesoAlvo, setPesoAlvo] = useState<number | ''>(85);
+  const [bfAtual, setBfAtual] = useState<number | ''>(15);
+  const [bfAlvo, setBfAlvo] = useState<number | ''>(10);
+  const [altura, setAltura] = useState<number | ''>(178);
+  const [idade, setIdade] = useState<number | ''>(25);
   const [sexo, setSexo] = useState<string>('masculino');
   const [nivelExperiencia, setNivelExperiencia] = useState<string>('intermediario');
   const [nivelAtividade, setNivelAtividade] = useState<string>('moderado');
@@ -135,7 +135,9 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
     }
   };
 
-  const atualizarSugestaoNome = (pAtual: number, pAlvo: number) => {
+  const atualizarSugestaoNome = (pAtual: number | '', pAlvo: number | '') => {
+    const pa = typeof pAtual === 'number' && !isNaN(pAtual) ? pAtual : 70;
+    const pal = typeof pAlvo === 'number' && !isNaN(pAlvo) ? pAlvo : 75;
     if (pAlvo < pAtual) {
       setNomeProjetoInput(`Cutting / Secagem (${pAtual}kg ➔ ${pAlvo}kg)`);
     } else if (pAlvo > pAtual) {
@@ -149,15 +151,21 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
     e.preventDefault();
     try {
       setCalculando(true);
+      const pAtual = typeof pesoAtual === 'number' && !isNaN(pesoAtual) ? pesoAtual : 70;
+      const pAlvo = typeof pesoAlvo === 'number' && !isNaN(pesoAlvo) ? pesoAlvo : 75;
+      const bAtual = typeof bfAtual === 'number' && !isNaN(bfAtual) ? bfAtual : 15;
+      const bAlvo = typeof bfAlvo === 'number' && !isNaN(bfAlvo) ? bfAlvo : 12;
+      const alt = typeof altura === 'number' && !isNaN(altura) ? altura : 175;
+      const id = typeof idade === 'number' && !isNaN(idade) ? idade : 25;
 
       // 1. Atualizar perfil
       await ServicoApi.atualizarPerfil({
-        peso_atual: pesoAtual,
-        peso_alvo: pesoAlvo,
-        bf_atual: bfAtual,
-        bf_alvo: bfAlvo,
-        altura_cm: altura,
-        idade,
+        peso_atual: pAtual,
+        peso_alvo: pAlvo,
+        bf_atual: bAtual,
+        bf_alvo: bAlvo,
+        altura_cm: alt,
+        idade: id,
         sexo,
         nivel_experiencia: nivelExperiencia,
         nivel_atividade: nivelAtividade
@@ -165,13 +173,13 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
 
       // 2. Calcular projeção matemática completa
       const resProj = await ServicoApi.calcularProjecao({
-        peso_atual: pesoAtual,
-        altura_cm: altura,
-        idade,
+        peso_atual: pAtual,
+        altura_cm: alt,
+        idade: id,
         sexo,
-        bf_atual: bfAtual,
-        peso_alvo: pesoAlvo,
-        bf_alvo: bfAlvo,
+        bf_atual: bAtual,
+        peso_alvo: pAlvo,
+        bf_alvo: bAlvo,
         nivel_experiencia: nivelExperiencia,
         nivel_atividade: nivelAtividade,
         estrategia_inicial: estrategiaInicial
@@ -179,15 +187,15 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
       setRelatorioCalculado(resProj);
 
       // 3. Criar e guardar o projeto com nome identificável
-      const nomeFinal = nomeProjetoInput.trim() || `Projeto ${pesoAtual}kg ➔ ${pesoAlvo}kg`;
+      const nomeFinal = nomeProjetoInput.trim() || `Projeto ${pAtual}kg ➔ ${pAlvo}kg`;
       const resCriar = await ServicoApi.criarProjeto({
         nome: nomeFinal,
         descricao: descricaoProjetoInput.trim() || `Estratégia: ${resProj.tipo_intencao || 'Transformação Corporal'}`,
         tipo_intencao: resProj.tipo_intencao || 'Transformação Corporal',
-        peso_inicial_kg: pesoAtual,
-        peso_alvo_kg: pesoAlvo,
-        bf_inicial: bfAtual,
-        bf_alvo: bfAlvo,
+        peso_inicial_kg: pAtual,
+        peso_alvo_kg: pAlvo,
+        bf_inicial: bAtual,
+        bf_alvo: bAlvo,
         estrategia_inicial: estrategiaInicial,
         duracao_total_semanas: resProj.semanas_totais_estimadas,
         fases: resProj.fases || [],
@@ -1370,9 +1378,14 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   step="0.1"
                   value={pesoAtual}
                   onChange={(e) => {
-                    const v = parseFloat(e.target.value) || 0;
-                    setPesoAtual(v);
-                    atualizarSugestaoNome(v, pesoAlvo);
+                    const v = e.target.value;
+                    if (v === '') {
+                      setPesoAtual('');
+                    } else {
+                      const n = parseFloat(v);
+                      setPesoAtual(isNaN(n) ? '' : n);
+                      if (!isNaN(n)) atualizarSugestaoNome(n, typeof pesoAlvo === 'number' ? pesoAlvo : 80);
+                    }
                   }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-bold focus:border-emerald-500 focus:outline-none"
                 />
@@ -1383,7 +1396,10 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   type="number"
                   step="0.5"
                   value={bfAtual}
-                  onChange={(e) => setBfAtual(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBfAtual(v === '' ? '' : (parseFloat(v) || 0));
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-bold focus:border-emerald-500 focus:outline-none"
                 />
               </div>
@@ -1397,9 +1413,14 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   step="0.1"
                   value={pesoAlvo}
                   onChange={(e) => {
-                    const v = parseFloat(e.target.value) || 0;
-                    setPesoAlvo(v);
-                    atualizarSugestaoNome(pesoAtual, v);
+                    const v = e.target.value;
+                    if (v === '') {
+                      setPesoAlvo('');
+                    } else {
+                      const n = parseFloat(v);
+                      setPesoAlvo(isNaN(n) ? '' : n);
+                      if (!isNaN(n)) atualizarSugestaoNome(typeof pesoAtual === 'number' ? pesoAtual : 70, n);
+                    }
                   }}
                   className="w-full bg-slate-950 border border-emerald-500/40 rounded-lg px-3 py-2 text-emerald-300 font-extrabold focus:outline-none"
                 />
@@ -1410,7 +1431,10 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   type="number"
                   step="0.5"
                   value={bfAlvo}
-                  onChange={(e) => setBfAlvo(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBfAlvo(v === '' ? '' : (parseFloat(v) || 0));
+                  }}
                   className="w-full bg-slate-950 border border-emerald-500/40 rounded-lg px-3 py-2 text-emerald-300 font-extrabold focus:outline-none"
                 />
               </div>
@@ -1422,7 +1446,10 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                 <input
                   type="number"
                   value={altura}
-                  onChange={(e) => setAltura(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAltura(v === '' ? '' : (parseFloat(v) || 0));
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-200"
                 />
               </div>
@@ -1431,7 +1458,10 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                 <input
                   type="number"
                   value={idade}
-                  onChange={(e) => setIdade(parseInt(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setIdade(v === '' ? '' : (parseInt(v) || 0));
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-200"
                 />
               </div>

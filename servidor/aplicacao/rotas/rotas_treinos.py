@@ -439,6 +439,11 @@ async def recomendar_treino_com_ia(
     coach = ServicoCoachIA(chave_api=chave_api)
     dados = requisicao.model_dump()
     if perfil:
+        dados["idade"] = perfil.idade or 25
+        dados["sexo"] = perfil.sexo or "masculino"
+        dados["peso_atual"] = perfil.peso_atual or 70.0
+        dados["nivel_experiencia"] = perfil.nivel_experiencia or "iniciante"
+    if perfil:
         if getattr(perfil, "projeto_ativo_json", None):
             try:
                 proj = json.loads(perfil.projeto_ativo_json)

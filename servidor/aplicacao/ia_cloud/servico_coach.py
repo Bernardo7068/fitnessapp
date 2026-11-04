@@ -29,6 +29,21 @@ from ..motor_matematico.dieta_adaptativa import TABELA_ALIMENTOS_EQUIVALENCIAS, 
 class ServicoCoachIA:
     def __init__(self, chave_api: Optional[str] = None, provedor: str = "gemini"):
         self.chave_api = chave_api or os.getenv("CHAVE_API_IA") or os.getenv("GEMINI_API_KEY")
+        if not self.chave_api:
+            for env_path in ["servidor/.env", ".env"]:
+                if os.path.exists(env_path):
+                    try:
+                        with open(env_path, "r", encoding="utf-8") as f_env:
+                            for l_env in f_env:
+                                l_env = l_env.strip()
+                                if l_env.startswith("GEMINI_API_KEY=") or l_env.startswith("CHAVE_API_IA="):
+                                    self.chave_api = l_env.split("=", 1)[1].strip().strip('"').strip("'")
+                                    if self.chave_api:
+                                        break
+                    except Exception:
+                        pass
+                if self.chave_api:
+                    break
         self.provedor = provedor.lower()
 
     async def obter_recomendacoes_coach(
@@ -484,8 +499,8 @@ class ServicoCoachIA:
     ) -> Dict[str, Any]:
         """
         Prescrição de treino heurística avançada baseada em biomecânica clínica,
-        substituições de lesões, objetivos híbridos (powerbuilding), compatibilidade de desportos
-        concorrentes (boxe/corrida), cadências flexíveis e reestruturação de rotinas anteriores.
+        substituições de lesões, adaptação pós-oncológica/cirúrgica, ordenação anatómica estrita
+        (agrupamento contíguo de exercícios inferiores e superiores) e compatibilidade total.
         """
         lesoes = str(dados_treino.get("lesoes_atuais_ou_passadas", "")).lower()
         pontos_fracos = str(dados_treino.get("desproporcoes_pontos_fracos", "")).lower()
@@ -496,6 +511,10 @@ class ServicoCoachIA:
         cadencia = str(dados_treino.get("cadencia_descanso", "dias_fixos")).lower()
         plano_anterior = str(dados_treino.get("plano_atual_ou_anterior", "")).strip()
 
+        idade = int(dados_treino.get("idade") or 25)
+        sexo = str(dados_treino.get("sexo") or "masculino").lower()
+        nivel_exp = str(dados_treino.get("nivel_experiencia") or "iniciante").lower()
+
         dias = max(2, min(6, int(dados_treino.get("dias_semana", 4))))
         duracao = int(dados_treino.get("duracao_minutos", 60))
         fase = str(dados_treino.get("fase_projeto", "cut")).lower()
@@ -504,35 +523,49 @@ class ServicoCoachIA:
         cardio_proj = int(dados_treino.get("cardio_minutos_semana", 0) or 0)
         calorias = float(dados_treino.get("calorias_diarias", 2200.0) or 2200.0)
         series_alvo = int(dados_treino.get("series_alvo_semana", 14) or 14)
+        tipo_divisao = str(dados_treino.get("tipo_divisao_preferida", "personalizada")).lower()
 
-        # Detetar se é Híbrido (Máxima Hipertrofia com Força nos 3 Grandes / Powerbuilding)
-        eh_hibrido = (
-            "powerbuilding" in objetivo or
-            "powerbuilding" in objetivos_det or
-            ("forca" in objetivos_det or "força" in objetivos_det) or
-            ("supino" in objetivos_det and "pesad" in objetivos_det)
-        )
-        eh_powerlifting_extremo = (
-            "powerlifting" in objetivo or
-            "powerlifting" in objetivos_det or
-            "1-5 reps" in objetivos_det or
-            "1rm" in objetivos_det
-        )
+        # 1. ANÁLISE EXAUSTIVA DE CONDIÇÕES CLÍNICAS, CIRURGIAS E LESÕES
+        texto_clinico = f"{lesoes} {limitacoes} {pontos_fracos} {objetivos_det}".lower()
 
-        # Determinar Reps, RPE e Descanso jogando com os dois pedidos (Hipertrofia + Força)
-        if eh_powerlifting_extremo:
+        termos_onco = [
+            "mastectom", "mama", "ganglio", "gânglio", "linfedem", "axilar",
+            "oncol", "cancro", "câncer", "peito retirado", "retirado o peito",
+            "retirado peito", "ganglios do braço", "gânglios do braço"
+        ]
+        tem_onco_mama = any(t in texto_clinico for t in termos_onco)
+
+        termos_ombro = ["ombro", "manguito", "cotovelo", "bursite", "tendinite", "acromial", "supraespinhal"]
+        tem_lesao_ombro = any(t in texto_clinico for t in termos_ombro)
+
+        termos_lombar = ["lombar", "coluna", "hernia", "hérnia", "ciatico", "ciático", "discopatia", "l4", "l5", "s1"]
+        tem_lesao_lombar = any(t in texto_clinico for t in termos_lombar)
+
+        termos_joelho = ["joelho", "patelar", "patela", "menisco", "condromalacia", "condromalácia"]
+        tem_lesao_joelho = any(t in texto_clinico for t in termos_joelho)
+
+        # Determinar objetivos e intensidades
+        eh_hibrido = ("powerbuilding" in objetivo or "powerbuilding" in objetivos_det) and not tem_onco_mama
+        eh_powerlifting = ("powerlifting" in objetivo or "powerlifting" in objetivos_det) and not tem_onco_mama
+
+        if tem_onco_mama:
+            reps_comp = "10-12"
+            reps_isol = "12-15"
+            rpe_alvo = 7.0
+            descanso_comp = 90
+            foco_desc = "Reabilitação Fisiológica & Hipertrofia Segura Pós-Oncológica (RPE ≤ 7.0 e Proteção Tecidual)"
+        elif eh_powerlifting:
             reps_comp = "3-5"
             reps_isol = "6-8"
             rpe_alvo = 8.5
             descanso_comp = 180
             foco_desc = "Powerlifting Puro (Cargas Máximas a 3-5 reps e Força Neural)"
         elif eh_hibrido:
-            # Conjuga os dois pedidos: Máxima Hipertrofia (foco primário) + Força nos 3 grandes (5 a 8 reps nos compostos base, 8 a 14 reps nos acessórios)
             reps_comp = "5-8"
             reps_isol = "8-12"
             rpe_alvo = 8.5
             descanso_comp = 120
-            foco_desc = "Powerbuilding Híbrido: Máxima Hipertrofia Miofibrilar com Sobrecarga Pesada nos 3 Grandes (5-8 reps nos compostos / 8-12 reps acessórios)"
+            foco_desc = "Powerbuilding Híbrido: Hipertrofia Miofibrilar com Sobrecarga nos 3 Grandes"
         elif "forca" in objetivo:
             reps_comp = "4-6"
             reps_isol = "6-8"
@@ -545,12 +578,12 @@ class ServicoCoachIA:
             rpe_alvo = 8.0
             descanso_comp = 60
             foco_desc = "Foco em Resistência Muscular e Densidade Metabólica"
-        elif "recuperacao" in objetivo or "reabilitacao" in objetivo or "lesao" in objetivo:
-            reps_comp = "10-12"
-            reps_isol = "12-15"
-            rpe_alvo = 7.0
+        elif "femin" in sexo and (idade >= 45 or "iniciante" in nivel_exp):
+            reps_comp = "8-10"
+            reps_isol = "10-12"
+            rpe_alvo = 7.5
             descanso_comp = 90
-            foco_desc = "Foco em Reabilitação Funcional com Cadência Controlada (3-0-2-0)"
+            foco_desc = "Hipertrofia Sustentável, Saúde Articular e Densidade Óssea (RPE 7.5)"
         else:
             reps_comp = "6-8"
             reps_isol = "8-12"
@@ -568,228 +601,185 @@ class ServicoCoachIA:
         else:
             cadencia_label = f"{dias} Dias Semanais Fixos"
 
-        # Compatibilidade com Desportos Concorrentes (Boxe, Corrida, etc.)
+        # Compatibilidade com Desportos Concorrentes
         horario_atividades = []
         if "boxe" in atividades or "luta" in atividades or "artes marciais" in atividades:
             horario_atividades.append(
-                "🥊 Boxe & Treino Superior: O boxe gera grande aceleração e impacto nos ombros, cotovelos e punhos. "
-                "Horário Recomendado: Pratica o boxe nos dias sem musculação ou pelo menos 24h afastado de treinos de empurrar (peito/ombros). "
-                "Evita sessões pesadas de saco ou sparring imediatamente antes de tentar bater recordes de carga no supino."
+                "🥊 Boxe & Treino Superior: Pratica o boxe nos dias sem musculação ou pelo menos 24h afastado de treinos de empurrar."
             )
         if "corrida" in atividades or "corro" in atividades or "jogging" in atividades:
             horario_atividades.append(
-                "🏃 Corrida & Pernas (Gestão de Interferência): O impacto mecânico e a fadiga excêntrica da corrida afetam os isquiotibiais e gémeos. "
-                "Horário Recomendado: Corre nos dias de descanso ou com separação mínima de 8 a 12 horas do treino de pernas. "
-                "Se correres no mesmo dia, faz a corrida APÓS a musculação (ou noutro período do dia), com intensidade moderada para proteger o glicogénio dos quadríceps."
-            )
-        if "futebol" in atividades:
-            horario_atividades.append(
-                "⚽ Futebol: Deixa 48h entre o treino pesado de pernas e o jogo para preservar a explosão dos adutores e joelhos."
+                "🏃 Corrida & Pernas: Corre nos dias de descanso ou com separação mínima de 8 a 12 horas do treino de pernas."
             )
         if cardio_proj > 0:
             horario_atividades.insert(0,
-                f"⏱️ Cardio Estabelecido no Teu Projeto: {cardio_proj} min/semana. "
-                f"Recomendado distribuir em 3 a 4 sessões de cerca de {cardio_proj // 3} minutos em intensidade moderada (Zona 2: 120-140 bpm) "
-                f"no pós-treino imediato ou nos dias de descanso, para promover o défice de gordura sem esgotar o glicogénio muscular para a força."
+                f"⏱️ Cardio Estabelecido no Projeto: {cardio_proj} min/semana em intensidade moderada (Zona 2: 120-140 bpm)."
             )
-
         if not horario_atividades:
-            if atividades:
-                horario_atividades.append(f"• Desporto Secundário ({atividades}): Distribuir preferencialmente nos dias de pausa da musculação ou com 6h de separação para maximizar a recuperação.")
-            else:
-                horario_atividades.append("• Sem desportos concorrentes reportados: Recuperação 100% canalizada para a musculação.")
+            horario_atividades.append("• Sem desportos concorrentes reportados: Recuperação canalizada para a musculação.")
 
         # Auditoria de Plano Anterior
         if plano_anterior:
             analise_plano_anterior = (
-                f"📋 Auditoria ao teu plano anterior: A rotina fornecida foi analisada e reestruturada para eliminar sobreposições de volume lixo "
-                f"e balancear a frequência semanal. Os grandes movimentos compostos foram ajustados para progressão de força ({reps_comp} reps com 3 min de descanso), "
-                f"enquanto os exercícios acessórios foram calibrados para hipertrofia sem inflamação articular crónica."
+                f"📋 Auditoria ao teu plano anterior: A rotina fornecida foi reorganizada para eliminar volume redundante, "
+                f"balancear o descanso e garantir agrupamentos biomecânicos perfeitos sem saltos erráticos de grupos musculares."
             )
         else:
-            analise_plano_anterior = "Plano elaborado do zero de acordo com a tua biomecânica e disponibilidade."
+            analise_plano_anterior = "Plano desenhado à medida das tuas condicionantes físicas e disponibilidade semanal."
 
-        # Deteção e priorização exaustiva de TODOS os grupos musculares nos pontos fracos
-        pf_texto = str(dados_treino.get("desproporcoes_pontos_fracos", "")).lower()
-        pf_palavras = set(re.findall(r'\b\w+\b', pf_texto))
-
-        # 1. BRAÇOS (Bíceps, Tríceps, Antebraços, Braquial)
-        chaves_bracos = {"braco", "bracos", "braço", "braços", "bicep", "biceps", "bícep", "bíceps", "tricep", "triceps", "trícep", "tríceps", "antebraco", "antebraço", "braquial"}
-        foco_bracos = bool(chaves_bracos.intersection(pf_palavras)) or any(k in pf_texto for k in ["braco", "braço", "bicep", "tricep", "braquial", "antebraço"])
-
-        # 2. PERNAS / MEMBROS INFERIORES
-        chaves_pernas = {"perna", "pernas", "quadricep", "quadriceps", "quadrícep", "quadríceps", "coxa", "coxas", "isquio", "isquios", "isquiotibial", "isquiotibiais", "femoral", "femurais"}
-        foco_pernas = bool(chaves_pernas.intersection(pf_palavras)) or any(k in pf_texto for k in ["perna", "coxa", "quadricep", "isquio", "femoral", "membros inferiores", "membro inferior"])
-
-        # 3. GLÚTEOS
-        chaves_gluteos = {"gluteo", "gluteos", "glúteo", "glúteos", "bumbum", "gluteal"}
-        foco_gluteos = bool(chaves_gluteos.intersection(pf_palavras)) or any(k in pf_texto for k in ["gluteo", "glúteo", "bumbum"])
-
-        # 4. GÉMEOS / PANTURRILHAS
-        chaves_panturrilhas = {"gemeo", "gemeos", "gémeo", "gémeos", "panturrilha", "panturrilhas", "panturrilhas", "panturrilha", "soleo", "sóleo", "gastrocnemio", "gastrocnémio"}
-        foco_panturrilhas = bool(chaves_panturrilhas.intersection(pf_palavras)) or any(k in pf_texto for k in ["gemeo", "gémeo", "panturrilha", "sóleo", "gastrocn"])
-
-        # 5. PEITORAL / PEITO (REGRA: só ativa peito se disser explicitamente peito ou peitoral! Nunca apenas 'superior')
-        tem_peito = any(k in pf_texto for k in ["peito", "peitoral", "tórax", "torax"])
-        foco_peito_superior = tem_peito and any(k in pf_texto for k in ["superior", "inclinad", "clavicular", "alto", "cima"])
-        foco_peito_geral = tem_peito and not foco_peito_superior
-
-        # 6. OMBROS / DELTOIDES
-        foco_ombros = any(k in pf_texto for k in ["ombro", "deltoid", "deltóid", "lateral"])
-
-        # 7. COSTAS / DORSAIS / TRAPÉZIO
-        foco_costas = any(k in pf_texto for k in ["costa", "dorsal", "trapezi", "trapézi", "asa", "largura", "espessura"])
-
-        # 8. ABDÓMEN / CORE
-        foco_core = any(k in pf_texto for k in ["abdom", "core", "lombar", "prancha", "oblíquo", "obliquo"])
-
-        # Volume e número de exercícios diferenciados por patamar mecânico
-        s_composto_base = 4
-        s_secundario = 3 if fase == "cut" else 4
-        s_isolador = 3
-        s_braco = (3 if fase == "cut" else 4) if foco_bracos else (2 if fase == "cut" else 3)
-        s_detalhe = 2
-        max_ex = 4 if duracao <= 45 else (5 if duracao <= 65 else 6)
-        tipo_divisao = str(dados_treino.get("tipo_divisao_preferida", "personalizada")).lower()
-
-        # Diagnóstico de adaptações de lesões
+        # Diagnóstico e Ajustes de Lesões
         ajustes_lesao = []
-        if "ombro" in lesoes or "manguito" in lesoes or "cotovelo" in lesoes:
+        if tem_onco_mama:
             ex_supino = "supino_halteres_pegada_neutra"
             ex_desenvolvimento = "face_pull"
             ajustes_lesao.append(
-                "• Lesão de Ombro/Cotovelo: Substituição do supino com barra reta por Supino com Halteres em Pegada Neutra (45º) "
+                "• Condição Oncológica & Pós-Cirúrgica (Mastectomia / Esvaziamento Ganglionar): Supino livre com barra estritamente contraindicado "
+                "para evitar edema axilar, tração sobre tecidos cicatriciais e compressão vascular. Substituído por Supino com Halteres em Pegada Neutra (45º) "
+                "com amplitude protegida e RPE estritamente contido a ≤ 7.0. Monitorizar qualquer sensação de peso ou edema no membro superior operado."
+            )
+        elif tem_lesao_ombro:
+            ex_supino = "supino_halteres_pegada_neutra"
+            ex_desenvolvimento = "face_pull"
+            ajustes_lesao.append(
+                "• Lesão de Ombro/Cotovelo: Substituição do supino reto com barra por Supino com Halteres em Pegada Neutra (45º) "
                 "para diminuir a compressão no espaço subacromial. Eliminado desenvolvimento pesado acima da cabeça."
             )
         else:
-            ex_supino = "supino_inclinado_halteres" if foco_peito_superior else "supino_reto_barra"
+            ex_supino = "supino_reto_barra"
             ex_desenvolvimento = "desenvolvimento_halteres"
 
-        if "lombar" in lesoes or "coluna" in lesoes:
+        if tem_lesao_lombar:
             ex_remada = "remada_apoiada_banco"
             ex_agachamento = "leg_press_45"
             ex_posterior = "hip_thrust_elevacao_pelvica"
             ajustes_lesao.append(
-                "• Lesão Lombar: Substituição da remada curvada e agachamento livre por Remada Apoiada no Banco e Leg Press 45º, "
+                "• Proteção Lombar/Coluna: Substituição da remada curvada e agachamento livre por Remada Apoiada no Banco e Leg Press 45º, "
                 "eliminando forças de cisalhamento na coluna vertebral L4-L5/S1."
             )
-        elif "joelho" in lesoes or "patelar" in lesoes:
+        elif tem_lesao_joelho:
             ex_remada = "remada_curvada_barra"
-            ex_agachamento = "agachamento_bulgaro"
+            ex_agachamento = "leg_press_45"
             ex_posterior = "peso_morto_romeno"
             ajustes_lesao.append(
-                "• Lesão no Joelho: Troca do agachamento tradicional por Agachamento Búlgaro cadenciado, reduzindo a sobrecarga patelofemoral "
-                "e aumentando o recrutamento de glúteos e estabilizadores da anca."
+                "• Proteção de Joelho/Patela: Troca do agachamento livre tradicional por Leg Press 45º cadenciado e pés médios, "
+                "reduzindo a sobrecarga patelofemoral e estabilizando a articulação."
             )
         else:
             ex_remada = "remada_curvada_barra"
             ex_agachamento = "agachamento_livre"
             ex_posterior = "peso_morto_romeno"
 
-
-        # Estruturação dinâmica das diretrizes de pontos fracos
+        # Pontos Fracos
+        foco_gluteos = any(k in pontos_fracos for k in ["gluteo", "glúteo", "bumbum"])
+        foco_bracos = any(k in pontos_fracos for k in ["braco", "braço", "bicep", "tricep"])
         ajustes_fracos = []
-        if foco_bracos:
-            s_braco = 3 if fase == "cut" else 4
-            ajustes_fracos.append("• Ponto Fraco (Braços - Bíceps & Tríceps): Priorização de volume e sobrecarga progressiva nos flexores e extensores do cotovelo (ênfase em Curl Martelo, Barra W e Tríceps Corda/Testa com 3-4 séries de alta intensidade e pico de contração de 1.5s).")
-
-        if foco_pernas:
-            ajustes_fracos.append("• Ponto Fraco (Membros Inferiores / Pernas): Estruturação de cadência excêntrica lenta (3s) em agachamento/leg press para maximizar tensão mecânica nas pernas, com ênfase em amplitude profunda e isolamento da cadeia posterior (RDL / Flexora).")
-
         if foco_gluteos:
-            ajustes_fracos.append("• Ponto Fraco (Glúteos): Inclusão prioritária de Hip Thrust com barra pesada, agachamento búlgaro inclinado e pico de contração de 2 segundos no ponto de máxima ativação dos glúteos.")
-
-        if foco_panturrilhas:
-            ajustes_fracos.append("• Ponto Fraco (Gémeos / Panturrilhas): Elevação de gémeos com pausa estrita de 2 segundos no ponto de alongamento máximo para eliminar a elasticidade do tendão de Aquiles e recrutar 100% de fibras musculares.")
-
-        if foco_peito_superior:
-            ajustes_fracos.append("• Ponto Fraco (Peitoral Superior / Clavicular): Início das sessões de tronco com Supino Inclinado com Halteres e Crossover Inclinado no ângulo de 30º para enfatizar as fibras claviculares do peitoral.")
-        elif foco_peito_geral:
-            ajustes_fracos.append("• Ponto Fraco (Peitoral Geral): Priorização de sobrecarga mecânica na adução horizontal com supino e crucifixo em amplitude ótima e retração escapular.")
-
-        if foco_ombros:
-            ajustes_fracos.append("• Ponto Fraco (Deltoides / Ombros): Elevações laterais colocadas estrategicamente com rotação de cabos e halteres para máxima largura do tronco e foco na cabeça lateral do ombro.")
-
-        if foco_costas:
-            ajustes_fracos.append("• Ponto Fraco (Costas & Dorsais): Estímulo balanceado de puxadas verticais para largura dorsal (V-Taper) e remadas pesadas apoiadas para espessura e densidade dos romboides e trapézio.")
-
-        if foco_core:
-            ajustes_fracos.append("• Ponto Fraco (Abdómen & Core): Inclusão de exercícios anti-extensão e flexão resistida do tronco (prancha dinâmica e elevação de pernas suspensa) para definição e estabilidade da cintura.")
-
+            ajustes_fracos.append("• Foco Prioritário em Glúteos: Inclusão estrutural de Hip Thrust com contração isométrica de 2 segundos.")
+        if foco_bracos:
+            ajustes_fracos.append("• Foco Prioritário em Braços: Trabalho direto nos flexores e extensores do cotovelo com pegadas articulares seguras.")
         if not ajustes_fracos:
-            if pf_texto.strip() and pf_texto.strip() not in ["nenhum", "nenhuma", "não", "nao", "nada"]:
-                ajustes_fracos.append(f"• Foco Personalizado do Atleta: Análise aplicada às indicações fornecidas ('{pf_texto.strip()}'), com calibragem dinâmica de volume para garantir harmonia muscular.")
-            else:
-                ajustes_fracos.append("• Equilíbrio Muscular Geral: Distribuição simétrica de volume entre agonistas e antagonistas (peito/costas, quadríceps/isquiotibiais, bíceps/tríceps).")
+            ajustes_fracos.append("• Equilíbrio Muscular e Harmonia: Distribuição simétrica e proporcional entre agonistas e antagonistas.")
 
-        # Gerar sessões adaptadas rigorosamente aos dias e patamares mecânicos
+        # Volume e séries
+        s_composto_base = 3 if ("iniciante" in nivel_exp or tem_onco_mama) else 4
+        s_secundario = 3
+        s_isolador = 3
+        s_braco = 3 if foco_bracos else 2
+        s_detalhe = 2
+        max_ex = 4 if duracao <= 45 else (5 if duracao <= 65 else 6)
+
+        def criar_ex(id_ex: str, series: int, reps_str: str, rpe: float, descanso: int, notas: str) -> Dict[str, Any]:
+            ex_info = EXERCICIOS_CATALOGO.get(id_ex, {})
+            return {
+                "id_exercicio": id_ex,
+                "nome": ex_info.get("nome", id_ex.replace("_", " ").title()),
+                "grupo_muscular_primario": ex_info.get("primario", "musculo"),
+                "grupo_muscular_secundario": ex_info.get("secundario", None),
+                "series": series,
+                "repeticoes": reps_str,
+                "repeticoes_alvo": reps_str,
+                "descanso_segundos": descanso,
+                "rpe_alvo": rpe,
+                "carga_sugerida_kg": 0.0,
+                "notas_execucao": notas
+            }
+
+        # 2. CONSTRUÇÃO RIGOROSA DAS SESSÕES COM ORDENAÇÃO BIOMECÂNICA CONTÍGUA
+        # (Todos os exercícios de pernas juntos; todos os exercícios de tronco juntos)
         sessoes = []
+
         if dias == 2:
             nome_divisao = "Upper / Lower Compacto 2x (IA Biomecânica)"
             sessoes = [
                 {
+                    "nome": "Dia 1: Superior Completo (Tronco & Força)",
                     "dia_nome": "Dia 1: Superior Completo (Tronco & Força)",
                     "foco": f"{foco_desc} (Peito, Costas, Ombros e Braços)",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Escápulas retraídas e deprimidas para estabilização acromial."},
-                        {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tração controlada junto ao tronco."},
-                        {"id_exercicio": ex_desenvolvimento, "nome": EXERCICIOS_CATALOGO[ex_desenvolvimento]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": "triceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada neutra ou semi-neutra para descompressão articular."},
-                        {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Expansão dorsal máxima."},
-                        {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento estrito sem impulsos."}
+                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Escápulas retraídas e deprimidas para estabilização acromial."),
+                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Tração controlada junto ao tronco."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
+                        criar_ex("puxada_frente_polia", s_isolador, reps_isol, rpe_alvo, 75, "Expansão dorsal controlada."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Isolamento estrito sem impulsos.")
                     ][:max_ex]
                 },
                 {
+                    "nome": "Dia 2: Inferior Completo (Pernas & Posterior)",
                     "dia_nome": "Dia 2: Inferior Completo (Pernas & Posterior)",
                     "foco": f"{foco_desc} (Quadríceps, Isquiotibiais e Gémeos)",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Descida controlada em 3 segundos."},
-                        {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento profundo da cadeia posterior."},
-                        {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pés na largura dos ombros sem descolar a bacia."},
-                        {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração no pico de flexão do joelho."},
-                        {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa isométrica de 1 segundo na ponta dos pés."}
+                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Descida controlada em 3 segundos."),
+                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Alongamento profundo da cadeia posterior."),
+                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Contração no pico de flexão do joelho."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Pausa isométrica de 1 segundo na ponta dos pés.")
                     ][:max_ex]
                 }
             ]
+
         elif dias == 3:
             if "ppl" in tipo_divisao or "push" in tipo_divisao:
                 nome_divisao = "Push / Pull / Legs 3x Personalizado (IA Biomecânica)"
                 sessoes = [
                     {
-                        "dia_nome": "Dia 1: Push (Empurrar / Peito, Ombros, Tríceps)",
-                        "foco": f"{foco_desc} (Cintura Escapular & Peitoral)",
+                        "nome": "Dia 1: Push (Peito, Ombros, Tríceps)",
+                        "dia_nome": "Dia 1: Push (Peito, Ombros, Tríceps)",
+                        "foco": "Cintura Escapular & Peitoral",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão peitoral contínua sem hiperextensão articular."},
-                            {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Banco regulado a 30 graus."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Elevação no plano escapular."},
-                            {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento controlado com peito erguido."},
-                            {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Abertura lateral na base do movimento."}
+                            criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tensão peitoral contínua sem hiperextensão articular."),
+                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_secundario, reps_comp, rpe_alvo, 90, "Banco regulado a 30 graus."),
+                            criar_ex(ex_desenvolvimento if not tem_onco_mama else "face_pull", s_secundario, reps_isol, rpe_alvo, 75, "Trabalho escapular seguro."),
+                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Elevação no plano escapular."),
+                            criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Abertura lateral na base do movimento.")
                         ][:max_ex]
                     },
                     {
-                        "dia_nome": "Dia 2: Pull (Puxar / Costas, Deltoide Posterior, Bíceps)",
-                        "foco": f"{foco_desc} (Densidade e Espessura Dorsal)",
+                        "nome": "Dia 2: Pull (Costas, Deltoide Posterior, Bíceps)",
+                        "dia_nome": "Dia 2: Pull (Costas, Deltoide Posterior, Bíceps)",
+                        "foco": "Densidade e Espessura Dorsal",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tração vertical sem balanço do tronco."},
-                            {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Cotovelos encostados às costelas."},
-                            {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Rotação externa fundamental para a cápsula do ombro."},
-                            {"id_exercicio": "curl_martelo_halteres", "nome": EXERCICIOS_CATALOGO["curl_martelo_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": "braquial", "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão constante no músculo braquial."},
-                            {"id_exercicio": "curl_biceps_barra_w", "nome": EXERCICIOS_CATALOGO["curl_biceps_barra_w"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada curvada protege as articulações do punho."}
+                            criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tração vertical sem balanço do tronco."),
+                            criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Cotovelos encostados às costelas."),
+                            criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Rotação externa fundamental para a cápsula do ombro."),
+                            criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Tensão constante no músculo braquial."),
+                            criar_ex("curl_biceps_barra_w", s_braco, reps_isol, rpe_alvo, 60, "Pegada curvada protege as articulações do punho.")
                         ][:max_ex]
                     },
                     {
-                        "dia_nome": "Dia 3: Legs (Pernas / Quadríceps, Posterior & Gémeos)",
-                        "foco": f"{foco_desc} (Membros Inferiores Completos)",
+                        "nome": "Dia 3: Legs (Pernas Completas)",
+                        "dia_nome": "Dia 3: Legs (Pernas Completas)",
+                        "foco": "Membros Inferiores Completos",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alinhamento das rótulas com os pés."},
-                            {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Empurrar os quadris para trás sem fletir a lombar."},
-                            {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Cadência excêntrica de 3 segundos."},
-                            {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento mecânico estrito dos flexores."},
-                            {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento completo no ponto de inversão."}
+                            criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
+                            criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Empurrar os quadris para trás sem fletir a lombar."),
+                            criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Cadência excêntrica de 3 segundos."),
+                            criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isolamento mecânico estrito dos flexores."),
+                            criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Alongamento completo no ponto de inversão.")
                         ][:max_ex]
                     }
                 ]
@@ -797,299 +787,251 @@ class ServicoCoachIA:
                 nome_divisao = "Full Body 3x Personalizado (IA Biomecânica)"
                 sessoes = [
                     {
+                        "nome": "Dia 1: Full Body - Foco Força & Estabilidade",
                         "dia_nome": "Dia 1: Full Body - Foco Força & Estabilidade",
-                        "foco": f"{foco_desc} (Tronco e Membros Inferiores)",
+                        "foco": f"{foco_desc} (Inferior Primeiro, Superior Consecutivo)",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Controlo rigoroso da descida (3 segundos)."},
-                            {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Escápulas retraídas e deprimidas para estabilização acromial."},
-                            {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Puxada até ao queixo, evitando balanço lombar."},
-                            {"id_exercicio": ex_desenvolvimento, "nome": EXERCICIOS_CATALOGO[ex_desenvolvimento]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Movimento puro sem rotação excessiva."},
-                            {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Dorsiflexão dos pés para ativar a cabeça curta do bíceps femoral."}
+                            # Bloco 1: Pernas contíguas
+                            criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Controlo rigoroso da descida (3 segundos)."),
+                            criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Dorsiflexão dos pés para ativar a cabeça curta do bíceps femoral."),
+                            # Bloco 2: Tronco contíguo
+                            criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Escápulas retraídas e cotovelos alinhados a 45º."),
+                            criar_ex("puxada_frente_polia", s_secundario, reps_comp, rpe_alvo, 90, "Puxada até ao queixo, evitando balanço lombar."),
+                            criar_ex(ex_desenvolvimento, s_secundario, reps_isol, rpe_alvo, 75, "Movimento seguro e controlado no plano escapular.")
                         ][:max_ex]
                     },
                     {
-                        "dia_nome": "Dia 2: Full Body - Foco Cadeia Posterior & Deltoides",
-                        "foco": f"{foco_desc} (Costas, Glúteos e Ombros)",
+                        "nome": "Dia 2: Full Body - Foco Posterior & Ombros",
+                        "dia_nome": "Dia 2: Full Body - Foco Posterior & Ombros",
+                        "foco": f"{foco_desc} (Inferior Primeiro, Superior Consecutivo)",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento dos isquiotibiais empurrando o quadril para trás."},
-                            {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tração com os cotovelos junto às costelas."},
-                            {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Abertura controlada para alongar o peitoral com segurança."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão contínua em todo o arco de movimento."},
-                            {"id_exercicio": "curl_martelo_halteres", "nome": EXERCICIOS_CATALOGO["curl_martelo_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": "braquial", "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Excelente para espessura do braço e antebraço."}
+                            # Bloco 1: Pernas contíguas
+                            criar_ex(ex_posterior, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alongamento dos isquiotibiais empurrando o quadril para trás."),
+                            criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
+                            # Bloco 2: Tronco contíguo
+                            criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Tração com cotovelos encostados às costelas."),
+                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_isolador, reps_isol, rpe_alvo, 75, "Foco peitoral com amplitude protegida."),
+                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Tensão contínua em todo o arco de movimento.")
                         ][:max_ex]
                     },
                     {
+                        "nome": "Dia 3: Full Body - Foco Densidade & Volume",
                         "dia_nome": "Dia 3: Full Body - Foco Densidade & Volume",
-                        "foco": f"{foco_desc} (Equilíbrio e Simetria)",
+                        "foco": f"{foco_desc} (Inferior Primeiro, Superior Consecutivo)",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Amplitude profunda sem descolar a bacia do assento."},
-                            {"id_exercicio": "puxada_triangulo", "nome": EXERCICIOS_CATALOGO["puxada_triangulo"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "deltoide_posterior", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração escapular de 1 segundo no final."},
-                            {"id_exercicio": "crucifixo_inclinado_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_inclinado_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Foco nas fibras claviculares do peito."},
-                            {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_detalhe, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Rotação externa fundamental para saúde dos rotadores."},
-                            {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Abertura da corda na fase concêntrica máxima."}
+                            # Bloco 1: Pernas contíguas
+                            criar_ex("leg_press_45", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Amplitude profunda e confortável sem retroversão."),
+                            criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isolamento contínuo dos flexores."),
+                            criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Pausa de 1 segundo no topo."),
+                            # Bloco 2: Tronco contíguo
+                            criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Contração escapular de 1 segundo no final."),
+                            criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Abertura da corda na fase concêntrica máxima.")
                         ][:max_ex]
                     }
                 ]
+
         elif dias == 4:
-            nome_divisao = "Upper / Lower Adaptado (IA Biomecânica 4x)"
+            nome_divisao = "Upper / Lower Adaptado 4x (IA Biomecânica)"
             sessoes = [
                 {
+                    "nome": "Dia 1: Superior A (Upper Força & Ombros Seguros)",
                     "dia_nome": "Dia 1: Superior A (Upper Força & Ombros Seguros)",
                     "foco": "Peitoral, Dorsais e Cintura Escapular",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Ângulo de cotovelos a 45 graus para conforto articular."},
-                        {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Estabilidade lombar total mantida durante as séries."},
-                        {"id_exercicio": "desenvolvimento_halteres", "nome": EXERCICIOS_CATALOGO["desenvolvimento_halteres"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": "triceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada semi-neutra para descompressão articular."},
-                        {"id_exercicio": "puxada_triangulo", "nome": EXERCICIOS_CATALOGO["puxada_triangulo"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "deltoide_posterior", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração das escápulas em isometria de 1 segundo."},
-                        {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Controlo excêntrico estrito sem balanço."}
+                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Cotovelos a 45º para total conforto articular."),
+                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Estabilidade do tronco e tração controlada."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
+                        criar_ex("puxada_triangulo", s_isolador, reps_isol, rpe_alvo, 75, "Contração escapular de 1 segundo no pico."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Controlo excêntrico sem balanço.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Dia 2: Inferior A (Lower Foco Quadríceps & Joelhos Protegidos)",
+                    "nome": "Dia 2: Inferior A (Lower Quadríceps & Joelhos Protegidos)",
+                    "dia_nome": "Dia 2: Inferior A (Lower Quadríceps & Joelhos Protegidos)",
                     "foco": "Quadríceps, Isquiotibiais e Gémeos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Joelho alinhado com a ponta do 2º dedo do pé."},
-                        {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Coluna neutra e ativação dos glúteos na subida."},
-                        {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pés na largura dos ombros na plataforma média."},
-                        {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa de 1 segundo na contração concêntrica."},
-                        {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento completo na base de cada repetição."}
+                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Joelho alinhado com a ponta dos pés e descida em 3 segundos."),
+                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Coluna neutra e ativação dos glúteos na subida."),
+                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros na plataforma média."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Pausa de 1 segundo na contração concêntrica."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Alongamento completo na base de cada repetição.")
                     ][:max_ex]
                 },
                 {
+                    "nome": "Dia 3: Superior B (Upper Hipertrofia & Deltoides Laterais)",
                     "dia_nome": "Dia 3: Superior B (Upper Hipertrofia & Deltoides Laterais)",
                     "foco": "Peitoral Superior, Costas e Bíceps",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Banco a 30 graus para foco nas fibras claviculares."},
-                        {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada aberta pronada para expansão dorsal."},
-                        {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão máxima na cabeça lateral do deltoide."},
-                        {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Cruzar ligeiramente as mãos para pico de contração."},
-                        {"id_exercicio": "curl_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["curl_inclinado_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento profundo da cabeça longa do bíceps."}
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Banco a 30 graus com pegada anatómica."),
+                        criar_ex("puxada_frente_polia", s_secundario, reps_comp, rpe_alvo, 90, "Pegada aberta pronada para expansão dorsal."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Tensão máxima na cabeça lateral do deltoide."),
+                        criar_ex("remada_unilateral_haltere" if tem_onco_mama else "crucifixo_cabos", s_isolador, reps_isol, rpe_alvo, 75, "Pico de contração controlado."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Alongamento e tensão no braquial e bíceps.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Dia 4: Inferior B (Lower Foco Cadeia Posterior & Glúteos)",
-                    "foco": "Isquiotibiais, Glúteos e Unilaterais",
+                    "nome": "Dia 4: Inferior B (Lower Foco Glúteos & Cadeia Posterior)",
+                    "dia_nome": "Dia 4: Inferior B (Lower Foco Glúteos & Cadeia Posterior)",
+                    "foco": "Glúteos, Isquiotibiais e Unilaterais",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": "hip_thrust_elevacao_pelvica", "nome": EXERCICIOS_CATALOGO["hip_thrust_elevacao_pelvica"]["nome"], "grupo_muscular_primario": "gluteos", "grupo_muscular_secundario": "isquiotibiais", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa de 2 segundos no topo sem hiperestender a lombar."},
-                        {"id_exercicio": "agachamento_bulgaro", "nome": EXERCICIOS_CATALOGO["agachamento_bulgaro"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tronco ligeiramente inclinado para frente para enfatizar o glúteo."},
-                        {"id_exercicio": "extensao_pernas", "nome": EXERCICIOS_CATALOGO["extensao_pernas"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Cadência lenta sem impulsos bruscos."},
-                        {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Amplitude total com tensão excêntrica."},
-                        {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Subida explosiva e descida em 3 segundos."}
+                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Pausa de 2 segundos no topo sem hiperestender a lombar."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Tronco ligeiramente inclinado para frente para enfatizar o glúteo."),
+                        criar_ex("extensao_pernas", s_isolador, reps_isol, rpe_alvo, 75, "Cadência lenta sem impulsos bruscos."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Amplitude total com tensão excêntrica."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Subida explosiva e descida em 3 segundos.")
                     ][:max_ex]
                 }
             ]
+
         elif dias == 5:
-            # Divisão 5 Dias: Push / Pull / Legs + Upper / Pull (ou Upper/Lower 5x se solicitado)
-            if "upper" in tipo_divisao or "superior" in tipo_divisao:
-                nome_divisao = "Upper / Lower Rotativo 5x (IA Biomecânica)"
-                sessoes = [
-                    {
-                        "dia_nome": "Dia 1: Superior A (Peitoral & Dorsais Força)",
-                        "foco": "Força no Supino e Remadas Pesadas",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Arco escapular seguro e pés plantados no chão."},
-                            {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tração controlada com ativação das dorsais."},
-                            {"id_exercicio": "desenvolvimento_halteres", "nome": EXERCICIOS_CATALOGO["desenvolvimento_halteres"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": "triceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Controlo rigoroso na fase excêntrica."},
-                            {"id_exercicio": "puxada_triangulo", "nome": EXERCICIOS_CATALOGO["puxada_triangulo"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "deltoide_posterior", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa isométrica de 1 segundo."},
-                            {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento lateral estrito."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Dia 2: Inferior A (Quadríceps & Gémeos)",
-                        "foco": "Agachamento e Tensão nos Quadríceps",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Descida controlada sem flexão lombar."},
-                            {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Sem bloquear os joelhos na extensão total."},
-                            {"id_exercicio": "extensao_pernas", "nome": EXERCICIOS_CATALOGO["extensao_pernas"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Pico de contração de 1 segundo."},
-                            {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Cadência lenta na descida."},
-                            {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Máximo alongamento na base."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Dia 3: Superior B (Hipertrofia Deltoides & Braços)",
-                        "foco": "Peito Superior, Ombros Laterais e Braços",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Foco clavicular estrito."},
-                            {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Abertura ampla de costas."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão contínua lateral."},
-                            {"id_exercicio": "curl_biceps_barra_w", "nome": EXERCICIOS_CATALOGO["curl_biceps_barra_w"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Sem oscilação do tronco."},
-                            {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Extensão completa no cotovelo."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Dia 4: Inferior B (Cadeia Posterior & Glúteos)",
-                        "foco": "Isquiotibiais, Glúteos e Unilaterais",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Hinge perfeito com foco nos isquiotibiais."},
-                            {"id_exercicio": "hip_thrust_elevacao_pelvica", "nome": EXERCICIOS_CATALOGO["hip_thrust_elevacao_pelvica"]["nome"], "grupo_muscular_primario": "gluteos", "grupo_muscular_secundario": "isquiotibiais", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pico de contração nos glúteos no topo."},
-                            {"id_exercicio": "agachamento_bulgaro", "nome": EXERCICIOS_CATALOGO["agachamento_bulgaro"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Trabalho unilateral de estabilidade."},
-                            {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento mecânico estrito."},
-                            {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa isométrica de 2 segundos."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Dia 5: Tronco & Densidade (Acessórios & Detalhes)",
-                        "foco": "Costas Espessas, Ombros Posteriores e Peitoral",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": "remada_unilateral_haltere", "nome": EXERCICIOS_CATALOGO["remada_unilateral_haltere"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Serrote com máxima amplitude dorsal."},
-                            {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Adução horizontal focada no esterno."},
-                            {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Saúde articular e deltoide posterior."},
-                            {"id_exercicio": "curl_martelo_halteres", "nome": EXERCICIOS_CATALOGO["curl_martelo_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": "braquial", "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Braquial e antebraço espessos."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Volume metabólico final no deltoide."}
-                        ][:max_ex]
-                    }
-                ]
-            else:
-                # PPL 5x Híbrido Padrão Ouro: Push A, Pull A, Legs A, Push B, Pull B
-                nome_divisao = "Push / Pull / Legs 5x Rotativo Personalizado (IA Biomecânica)"
-                sessoes = [
-                    {
-                        "dia_nome": "Sessão 1: Push A (Empurrar / Peito Reto, Ombros & Tríceps)",
-                        "foco": f"{foco_desc} (Força Mecânica no Supino)",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Composto principal: 4 séries pesadas com escápulas travadas."},
-                            {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Banco a 30º para enfatizar o peito superior."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Cabo na altura da anca para curva de resistência ideal."},
-                            {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento peitoral com adução completa."},
-                            {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tríceps isolado com abertura firme na fase final."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Sessão 2: Pull A (Puxar / Grande Dorsal, Bíceps & Trapézio)",
-                        "foco": f"{foco_desc} (Largura Dorsal e Força de Tração)",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Composto principal de tração vertical: 4 séries focadas no grande dorsal."},
-                            {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tração horizontal pesada para espessura das costas."},
-                            {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Essencial para proteger o manguito e deltoide posterior."},
-                            {"id_exercicio": "curl_biceps_barra_w", "nome": EXERCICIOS_CATALOGO["curl_biceps_barra_w"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Séries calibradas para bíceps com pegada ergonómica."},
-                            {"id_exercicio": "curl_martelo_halteres", "nome": EXERCICIOS_CATALOGO["curl_martelo_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": "braquial", "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Hipertrofia do braquial e antebraço."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Sessão 3: Legs A (Pernas / Quadríceps, Posterior & Gémeos)",
-                        "foco": f"{foco_desc} (Base e Força Inferior)",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Composto rei: 4 séries pesadas com técnica biomecânica rigorosa."},
-                            {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento dos isquiotibiais com coluna lombar imóvel."},
-                            {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Sobrecarga nos quadríceps com suporte total para a coluna."},
-                            {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento no pico de contração."},
-                            {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "2 séries intensas com pausa no ponto mais alto."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Sessão 4: Push B (Empurrar / Peito Clavicular, Deltoides & Ombros)",
-                        "foco": f"{foco_desc} (Hipertrofia Peitoral Superior e V-Taper)",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Composto principal da Sessão 4: 4 séries focadas nas fibras claviculares."},
-                            {"id_exercicio": "desenvolvimento_halteres", "nome": EXERCICIOS_CATALOGO["desenvolvimento_halteres"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": "triceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Carga progressiva para deltoides anteriores e médios."},
-                            {"id_exercicio": "crucifixo_inclinado_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_inclinado_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento isolado sem apoio articular desnecessário."},
-                            {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão máxima na fase excêntrica da elevação lateral."},
-                            {"id_exercicio": "triceps_frances_cabos", "nome": EXERCICIOS_CATALOGO["triceps_frances_cabos"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento profundo da cabeça longa do tríceps."}
-                        ][:max_ex]
-                    },
-                    {
-                        "dia_nome": "Sessão 5: Pull B (Puxar / Espessura Dorsal, Deltoide Posterior & Braços)",
-                        "foco": f"{foco_desc} (Densidade de Costas e Braços Definidos)",
-                        "tempo_estimado_minutos": duracao,
-                        "exercicios": [
-                            {"id_exercicio": "remada_unilateral_haltere", "nome": EXERCICIOS_CATALOGO["remada_unilateral_haltere"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Composto principal da Sessão 5: 4 séries pesadas com amplitude máxima."},
-                            {"id_exercicio": "puxada_triangulo", "nome": EXERCICIOS_CATALOGO["puxada_triangulo"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "deltoide_posterior", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Adução escapular e espessura no meio das costas."},
-                            {"id_exercicio": "pullover_cabos", "nome": EXERCICIOS_CATALOGO["pullover_cabos"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento puro do grande dorsal sem fadigar o bíceps."},
-                            {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_detalhe, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Proteção escapular de fim de semana."},
-                            {"id_exercicio": "curl_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["curl_inclinado_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Pico de contração da cabeça longa do bíceps."}
-                        ][:max_ex]
-                    }
-                ]
-        else:
-            # dias == 6: Push / Pull / Legs 6x Completo (2 rotações completas)
-            nome_divisao = "Push / Pull / Legs 6x Alta Frequência (IA Biomecânica)"
+            nome_divisao = "Push / Pull / Legs + Upper / Lower 5x (IA Biomecânica)"
             sessoes = [
                 {
-                    "dia_nome": "Sessão 1: Push A (Empurrar / Peito Reto & Tríceps)",
-                    "foco": f"{foco_desc} (Força Mecânica)",
+                    "nome": "Dia 1: Push (Peito, Ombros & Tríceps)",
+                    "dia_nome": "Dia 1: Push (Peito, Ombros & Tríceps)",
+                    "foco": "Empurrar - Cintura Escapular",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_supino, "nome": EXERCICIOS_CATALOGO[ex_supino]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "triceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão peitoral contínua sem hiperextensão articular."},
-                        {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Banco a 30º."},
-                        {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Ponto alto na linha dos olhos."},
-                        {"id_exercicio": "crucifixo_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração em adução horizontal."},
-                        {"id_exercicio": "triceps_corda_polia", "nome": EXERCICIOS_CATALOGO["triceps_corda_polia"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Abertura lateral na base."}
+                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Cotovelos alinhados a 45º."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Movimento seguro no plano escapular."),
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_isolador, reps_isol, rpe_alvo, 75, "Peitoral clavicular."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Isolamento de deltoide lateral."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Extensão sem balanço.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Sessão 2: Pull A (Puxar / Costas & Bíceps)",
-                    "foco": f"{foco_desc} (Densidade e Espessura Dorsal)",
+                    "nome": "Dia 2: Pull (Dorsais, Deltoide Posterior & Bíceps)",
+                    "dia_nome": "Dia 2: Pull (Dorsais, Deltoide Posterior & Bíceps)",
+                    "foco": "Puxar - Espessura e Largura Dorsal",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": "puxada_frente_polia", "nome": EXERCICIOS_CATALOGO["puxada_frente_polia"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Trabalho puro do grande dorsal."},
-                        {"id_exercicio": ex_remada, "nome": EXERCICIOS_CATALOGO[ex_remada]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Apoio seguro para isolar as costas."},
-                        {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Proteção do manguito rotador."},
-                        {"id_exercicio": "curl_biceps_barra_w", "nome": EXERCICIOS_CATALOGO["curl_biceps_barra_w"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada angulada da barra W preserva os pulsos."},
-                        {"id_exercicio": "curl_martelo_halteres", "nome": EXERCICIOS_CATALOGO["curl_martelo_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": "braquial", "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Cargas progressivas no braquial."}
+                        criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tração vertical limpa."),
+                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Remada com cotovelos fechados."),
+                        criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Saúde dos rotadores externos."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Braquial e flexores do cotovelo.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Sessão 3: Legs A (Pernas / Quadríceps & Gémeos)",
-                    "foco": f"{foco_desc} (Potência e Preservação Articular)",
+                    "nome": "Dia 3: Legs (Pernas Completas)",
+                    "dia_nome": "Dia 3: Legs (Pernas Completas)",
+                    "foco": "Membros Inferiores Completos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_agachamento, "nome": EXERCICIOS_CATALOGO[ex_agachamento]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alinhamento articular seguro."},
-                        {"id_exercicio": "leg_press_45", "nome": EXERCICIOS_CATALOGO["leg_press_45"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_isol, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Descida controlada."},
-                        {"id_exercicio": "extensao_pernas", "nome": EXERCICIOS_CATALOGO["extensao_pernas"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Pausa de 1 segundo no topo."},
-                        {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento de flexores de joelho."},
-                        {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração máxima no topo."}
+                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
+                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Empurrar os quadris para trás."),
+                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Descida cadenciada."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Flexores do joelho."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos em pé.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Sessão 4: Push B (Empurrar / Peito Superior & Ombros)",
-                    "foco": f"{foco_desc} (Foco Clavicular e Deltoides Laterais)",
+                    "nome": "Dia 4: Upper (Superior Hipertrofia)",
+                    "dia_nome": "Dia 4: Upper (Superior Hipertrofia)",
+                    "foco": "Tronco Completo e Harmonia",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": "supino_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["supino_inclinado_halteres"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": "ombros", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Banco a 30º para peito superior."},
-                        {"id_exercicio": "desenvolvimento_halteres", "nome": EXERCICIOS_CATALOGO["desenvolvimento_halteres"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": "triceps", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pegada neutra e controlo na descida."},
-                        {"id_exercicio": "crucifixo_inclinado_cabos", "nome": EXERCICIOS_CATALOGO["crucifixo_inclinado_cabos"]["nome"], "grupo_muscular_primario": "peito", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento isolado das fibras superiores."},
-                        {"id_exercicio": "elevacao_lateral_cabos", "nome": EXERCICIOS_CATALOGO["elevacao_lateral_cabos"]["nome"], "grupo_muscular_primario": "ombros", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão constante nos deltoides médios."},
-                        {"id_exercicio": "triceps_frances_cabos", "nome": EXERCICIOS_CATALOGO["triceps_frances_cabos"]["nome"], "grupo_muscular_primario": "triceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Cabeça longa do tríceps em máxima extensão."}
+                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Supino seguro."),
+                        criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Costas e deltoides posteriores."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Ombros laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Sessão 5: Pull B (Puxar / Dorsais, Trapézio & Braços)",
-                    "foco": f"{foco_desc} (Densidade e Braço Completo)",
+                    "nome": "Dia 5: Lower (Cadeia Posterior & Glúteos)",
+                    "dia_nome": "Dia 5: Lower (Cadeia Posterior & Glúteos)",
+                    "foco": "Glúteos e Isquiotibiais",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": "remada_unilateral_haltere", "nome": EXERCICIOS_CATALOGO["remada_unilateral_haltere"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "biceps", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Remada unilateral com carga pesada e amplitude profunda."},
-                        {"id_exercicio": "puxada_triangulo", "nome": EXERCICIOS_CATALOGO["puxada_triangulo"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": "deltoide_posterior", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Contração escapular de 1 segundo."},
-                        {"id_exercicio": "pullover_cabos", "nome": EXERCICIOS_CATALOGO["pullover_cabos"]["nome"], "grupo_muscular_primario": "costas", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Isolamento das dorsais com braços semi-estendidos."},
-                        {"id_exercicio": "face_pull", "nome": EXERCICIOS_CATALOGO["face_pull"]["nome"], "grupo_muscular_primario": "deltoide_posterior", "grupo_muscular_secundario": "trapezio", "series": s_detalhe, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Proteção do manguito rotador."},
-                        {"id_exercicio": "curl_inclinado_halteres", "nome": EXERCICIOS_CATALOGO["curl_inclinado_halteres"]["nome"], "grupo_muscular_primario": "biceps", "grupo_muscular_secundario": None, "series": s_braco, "repeticoes_alvo": reps_isol, "descanso_segundos": 60, "rpe_alvo": 8.5, "carga_sugerida_kg": 0.0, "notas_execucao": "Alongamento profundo do bíceps."}
+                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Glúteos no topo."),
+                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés altos na plataforma."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Unilateral."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isquiotibiais."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos.")
+                    ][:max_ex]
+                }
+            ]
+
+        else:  # dias == 6
+            nome_divisao = "Push / Pull / Legs 6x (IA Biomecânica)"
+            sessoes = [
+                {
+                    "nome": "Sessão 1: Push A (Peito & Ombros)",
+                    "dia_nome": "Sessão 1: Push A (Peito & Ombros)",
+                    "foco": "Empurrar com Foco Peitoral",
+                    "tempo_estimado_minutos": duracao,
+                    "exercicios": [
+                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Supino seguro a 45º."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Ombros alinhados."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Deltoides laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps corda.")
                     ][:max_ex]
                 },
                 {
-                    "dia_nome": "Sessão 6: Legs B (Pernas / Cadeia Posterior & Glúteos)",
-                    "foco": f"{foco_desc} (Isquiotibiais e Glúteos)",
+                    "nome": "Sessão 2: Pull A (Costas & Bíceps)",
+                    "dia_nome": "Sessão 2: Pull A (Costas & Bíceps)",
+                    "foco": "Puxar com Foco Dorsal",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        {"id_exercicio": ex_posterior, "nome": EXERCICIOS_CATALOGO[ex_posterior]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": "gluteos", "series": s_composto_base, "repeticoes_alvo": reps_comp, "descanso_segundos": descanso_comp, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Peso morto romeno focado em isquiotibiais."},
-                        {"id_exercicio": "hip_thrust_elevacao_pelvica", "nome": EXERCICIOS_CATALOGO["hip_thrust_elevacao_pelvica"]["nome"], "grupo_muscular_primario": "gluteos", "grupo_muscular_secundario": "isquiotibiais", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Pico de contração de 2 segundos no topo."},
-                        {"id_exercicio": "agachamento_bulgaro", "nome": EXERCICIOS_CATALOGO["agachamento_bulgaro"]["nome"], "grupo_muscular_primario": "quadriceps", "grupo_muscular_secundario": "gluteos", "series": s_secundario, "repeticoes_alvo": reps_comp, "descanso_segundos": 90, "rpe_alvo": rpe_alvo, "carga_sugerida_kg": 0.0, "notas_execucao": "Unilateral cadenciado sem impulsos."},
-                        {"id_exercicio": "flexao_pernas_deitado", "nome": EXERCICIOS_CATALOGO["flexao_pernas_deitado"]["nome"], "grupo_muscular_primario": "isquiotibiais", "grupo_muscular_secundario": None, "series": s_isolador, "repeticoes_alvo": reps_isol, "descanso_segundos": 75, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Tensão excêntrica pura."},
-                        {"id_exercicio": "elevacao_gemeos_pe", "nome": EXERCICIOS_CATALOGO["elevacao_gemeos_pe"]["nome"], "grupo_muscular_primario": "gemeos", "grupo_muscular_secundario": None, "series": s_detalhe, "repeticoes_alvo": "12-15", "descanso_segundos": 60, "rpe_alvo": 9.0, "carga_sugerida_kg": 0.0, "notas_execucao": "Gémeos até à falha técnica com máxima flexão plantar."}
+                        criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Puxada vertical."),
+                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Remada com pegada neutra."),
+                        criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Rotadores externos."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Bíceps e braquial.")
+                    ][:max_ex]
+                },
+                {
+                    "nome": "Sessão 3: Legs A (Quadríceps & Gémeos)",
+                    "dia_nome": "Sessão 3: Legs A (Quadríceps & Gémeos)",
+                    "foco": "Membros Inferiores - Foco Quadríceps",
+                    "tempo_estimado_minutos": duracao,
+                    "exercicios": [
+                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Agachamento cadenciado."),
+                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés médios."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Flexora."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos em pé.")
+                    ][:max_ex]
+                },
+                {
+                    "nome": "Sessão 4: Push B (Peito Superior & Tríceps)",
+                    "dia_nome": "Sessão 4: Push B (Peito Superior & Tríceps)",
+                    "foco": "Empurrar - Foco Fibras Claviculares",
+                    "tempo_estimado_minutos": duracao,
+                    "exercicios": [
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Banco a 30 graus."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Ombros seguros."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Deltoides laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps.")
+                    ][:max_ex]
+                },
+                {
+                    "nome": "Sessão 5: Pull B (Costas Espessura & Braços)",
+                    "dia_nome": "Sessão 5: Pull B (Costas Espessura & Braços)",
+                    "foco": "Puxar - Espessura e Trapézio",
+                    "tempo_estimado_minutos": duracao,
+                    "exercicios": [
+                        criar_ex("remada_unilateral_haltere", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Remada unilateral com apoio."),
+                        criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Contração escapular."),
+                        criar_ex("face_pull", s_detalhe, reps_isol, rpe_alvo, 60, "Proteção do manguito."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Bíceps braquial.")
+                    ][:max_ex]
+                },
+                {
+                    "nome": "Sessão 6: Legs B (Cadeia Posterior & Glúteos)",
+                    "dia_nome": "Sessão 6: Legs B (Cadeia Posterior & Glúteos)",
+                    "foco": "Isquiotibiais e Glúteos",
+                    "tempo_estimado_minutos": duracao,
+                    "exercicios": [
+                        criar_ex(ex_posterior, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Peso morto romeno focado em isquiotibiais."),
+                        criar_ex("hip_thrust_elevacao_pelvica", s_secundario, reps_comp, rpe_alvo, 90, "Pico de contração de 2 segundos."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Unilateral cadenciado."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Tensão excêntrica pura."),
+                        criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos.")
                     ][:max_ex]
                 }
             ]
@@ -1097,31 +1039,15 @@ class ServicoCoachIA:
         volume_total = sum(sum(ex["series"] for ex in s["exercicios"]) for s in sessoes)
 
         analise_bio = (
-            f"O algoritmo de IA analisou o teu projeto ({fase.upper()} a {dados_treino.get('calorias_diarias', 2200)} kcal) "
-            f"e desenhou uma periodização com {volume_total} séries semanais totais. "
-            f"Os exercícios foram calibrados para {foco_desc}, respeitando estritamente o tempo de {duracao} minutos por sessão."
+            f"O motor adaptativo desenhou uma periodização anatómica estrita com {volume_total} séries semanais totais. "
+            f"Os exercícios foram agrupados por contiguidade muscular (sem alternâncias caóticas entre pernas e tronco), "
+            f"respeitando a meta de {duracao} minutos por sessão e o perfil biomecânico do atleta."
         )
 
-        if "cut" in fase or "mini" in fase or "defice" in fase:
-            sincro = (
-                f"🎯 Sincronização Estrita com o Teu Projeto ({nome_fase or fase.upper()} a {calorias:.0f} kcal/dia):\n"
-                f"• Como o défice calórico reduz as reservas de glicogénio e a velocidade de regeneração tecidual, o volume foi estritamente contido em {volume_total} séries totais semanais (~{series_alvo} séries por músculo) para prevenir catabolismo e fadiga excessiva do SNC.\n"
-                f"• A intensidade mecânica das cargas ({reps_comp} reps a RPE {rpe_alvo}) nos compostos base foi preservada para sinalizar aos recetores musculares a retenção absoluta de massa magra enquanto a gordura é queimada."
-            )
-        elif "bulk" in fase or "lean_bulk" in fase:
-            sincro = (
-                f"🎯 Sincronização Estrita com o Teu Projeto ({nome_fase or fase.upper()} a {calorias:.0f} kcal/dia):\n"
-                f"• Aproveitando o superávit energético e a supercompensação de glicogénio ({calorias:.0f} kcal), o volume foi calibrado para {volume_total} séries totais para maximizar a síntese proteica (via mTOR).\n"
-                f"• Os compostos e acessórios beneficiam de progressão dupla consistente de cargas e repetições."
-            )
-        else:
-            sincro = (
-                f"🎯 Sincronização Estrita com o Teu Projeto ({nome_fase or fase.upper()} a {calorias:.0f} kcal/dia):\n"
-                f"• Calibrado para recomposição corporal atlética: volume de {volume_total} séries totais com progressão de tensão mecânica e recuperação equilibrada a {calorias:.0f} kcal."
-            )
-
-        if foco_proj:
-            sincro += f"\n• Diretriz Específica do Projeto Integrada: '{foco_proj}'."
+        sincro = (
+            f"Sincronização com o Projeto ({nome_fase or fase.upper()} a {calorias:.0f} kcal/dia): "
+            f"Volume total de {volume_total} séries semanais e cargas a RPE {rpe_alvo} ({reps_comp} reps)."
+        )
 
         return {
             "nome_divisao": f"{nome_divisao} ({cadencia_label})",
@@ -1201,24 +1127,33 @@ class ServicoCoachIA:
         """
         Gera uma dieta personalizada precisa com alimentos reais e gramas exatos,
         sincronizada com a fase do projeto, timing do treino e preferências/saciedade.
+        Garante proteção lipídica para mulheres (especialmente 40+), evita sobrecarga
+        excessiva de amidos numa única refeição e respeita apetite matinal reduzido.
         """
-        calorias = float(dados_dieta.get("calorias_diarias") or 2500.0)
+        calorias = float(dados_dieta.get("calorias_diarias") or 2200.0)
         fase = str(dados_dieta.get("fase_projeto") or "bulk").lower()
         nome_fase = str(dados_dieta.get("nome_fase_projeto") or "")
         num_refeicoes = max(3, min(6, int(dados_dieta.get("numero_refeicoes") or 4)))
         horario_treino = str(dados_dieta.get("horario_treino") or "tarde").lower()
-        
+
         preferidos = str(dados_dieta.get("alimentos_preferidos") or "").lower()
         evitados = str(dados_dieta.get("alimentos_evitados") or "").lower()
         apetite = str(dados_dieta.get("habitos_apetite") or "").lower()
         dificeis = str(dados_dieta.get("alimentos_dificeis") or "").lower()
+
+        peso_ref = float(dados_dieta.get("peso_atual") or 70.0)
+        sexo = str(dados_dieta.get("sexo") or "masculino").lower()
+        idade = int(dados_dieta.get("idade") or 25)
+
+        eh_mulher = "fem" in sexo or "mulher" in sexo
 
         pouco_apetite_manha = (
             "pouco apetite" in apetite or
             "não como muito" in apetite or
             "pouca fome de manhã" in apetite or
             "não tenho fome de manhã" in apetite or
-            "pequeno" in apetite and "pouco" in apetite
+            ("pequeno" in apetite and "pouco" in apetite) or
+            "como pouco" in apetite
         )
 
         dificuldade_comer = (
@@ -1229,25 +1164,28 @@ class ServicoCoachIA:
             "difícil" in dificeis
         )
 
-        # Distribuição de macronutrientes da fase baseada no peso real do atleta
-        peso_ref = float(dados_dieta.get("peso_atual") or 75.0)
-        if "cut" in fase or "definicao" in fase:
-            proteina_alvo = round(peso_ref * 2.2, 1)  # 2.2 g/kg em corte para blindar massa magra
-            gordura_alvo = round(peso_ref * 0.75, 1)  # ~58g
-            kcal_restantes = max(200.0, calorias - (proteina_alvo * 4.0 + gordura_alvo * 9.0))
-            hidratos_alvo = round(kcal_restantes / 4.0, 1)
-        elif "bulk" in fase or "hipertrofia" in fase:
-            proteina_alvo = round(peso_ref * 2.0, 1)  # 2.0 g/kg
-            gordura_alvo = round(peso_ref * 0.9, 1)   # ~70g
-            kcal_restantes = max(200.0, calorias - (proteina_alvo * 4.0 + gordura_alvo * 9.0))
-            hidratos_alvo = round(kcal_restantes / 4.0, 1)
-        else:  # recomposição
-            proteina_alvo = round(peso_ref * 2.1, 1)
-            gordura_alvo = round(peso_ref * 0.8, 1)
-            kcal_restantes = max(200.0, calorias - (proteina_alvo * 4.0 + gordura_alvo * 9.0))
-            hidratos_alvo = round(kcal_restantes / 4.0, 1)
+        # 1. DISTRIBUIÇÃO DE MACRONUTRIENTES CIENTÍFICA & ADAPTADA
+        if eh_mulher:
+            # Mulheres necessitam de lípidos suficientes para a integridade endócrina
+            fator_g = 1.15 if idade >= 45 else 1.05
+            gordura_alvo = max(50.0, round(peso_ref * fator_g, 1))
+            fator_p = 2.0 if ("cut" in fase or "definicao" in fase) else 1.8
+            proteina_alvo = round(peso_ref * fator_p, 1)
+        else:
+            if "cut" in fase or "definicao" in fase:
+                proteina_alvo = round(peso_ref * 2.2, 1)
+                gordura_alvo = max(50.0, round(peso_ref * 0.75, 1))
+            elif "bulk" in fase or "hipertrofia" in fase:
+                proteina_alvo = round(peso_ref * 2.0, 1)
+                gordura_alvo = max(55.0, round(peso_ref * 0.90, 1))
+            else:
+                proteina_alvo = round(peso_ref * 2.1, 1)
+                gordura_alvo = max(52.0, round(peso_ref * 0.80, 1))
 
-        # Proporções de refeições
+        kcal_restantes = max(200.0, calorias - (proteina_alvo * 4.0 + gordura_alvo * 9.0))
+        hidratos_alvo = round(kcal_restantes / 4.0, 1)
+
+        # 2. PROPORÇÕES DE REFEIÇÕES
         if pouco_apetite_manha:
             if num_refeicoes == 3:
                 pcts = [0.15, 0.45, 0.40]
@@ -1255,11 +1193,11 @@ class ServicoCoachIA:
                 pcts = [0.15, 0.35, 0.22, 0.28]
             elif num_refeicoes == 5:
                 pcts = [0.12, 0.30, 0.20, 0.25, 0.13]
-            else:  # 6
+            else:
                 pcts = [0.10, 0.25, 0.18, 0.20, 0.17, 0.10]
         else:
             if num_refeicoes == 3:
-                pcts = [0.30, 0.40, 0.30]
+                pcts = [0.28, 0.40, 0.32]
             elif num_refeicoes == 4:
                 pcts = [0.24, 0.33, 0.20, 0.23]
             elif num_refeicoes == 5:
@@ -1283,55 +1221,16 @@ class ServicoCoachIA:
                     ("Refeição 3: Lanche da Tarde Equilibrado", "16:30"),
                     ("Refeição 4: Jantar Noturno Reparador", "20:30")
                 ]
-            elif num_refeicoes == 5:
+            else:
                 titulos_horarios = [
                     ("Refeição 1: Pré-Treino Rápido", "07:00"),
                     ("Refeição 2: Pós-Treino Imediato", "09:30"),
                     ("Refeição 3: Almoço Principal", "13:00"),
                     ("Refeição 4: Lanche da Tarde", "17:00"),
-                    ("Refeição 5: Jantar Recuperador", "20:30")
-                ]
-            else:
-                titulos_horarios = [
-                    ("Refeição 1: Pré-Treino Leve", "07:00"),
-                    ("Refeição 2: Shake Pós-Treino", "09:30"),
-                    ("Refeição 3: Almoço Completo", "13:00"),
-                    ("Refeição 4: Lanche da Tarde 1", "16:00"),
-                    ("Refeição 5: Lanche da Tarde 2", "18:30"),
-                    ("Refeição 6: Jantar Reparador", "21:00")
-                ]
-        elif horario_treino == "tarde":
-            if num_refeicoes == 3:
-                titulos_horarios = [
-                    ("Pequeno-Almoço Energético", "08:30"),
-                    ("Almoço Completo (Energia Pré-Treino)", "12:30"),
-                    ("Jantar Pós-Treino Reparador", "20:30")
-                ]
-            elif num_refeicoes == 4:
-                titulos_horarios = [
-                    ("Refeição 1: Pequeno-Almoço Energético", "08:30"),
-                    ("Refeição 2: Almoço Sustentado", "12:30"),
-                    ("Refeição 3: Lanche Pré-Treino de Alta Performance", "16:30"),
-                    ("Refeição 4: Jantar Pós-Treino Anabólico", "20:30")
-                ]
-            elif num_refeicoes == 5:
-                titulos_horarios = [
-                    ("Refeição 1: Pequeno-Almoço", "08:30"),
-                    ("Refeição 2: Almoço", "12:30"),
-                    ("Refeição 3: Pré-Treino Focado", "16:00"),
-                    ("Refeição 4: Jantar Pós-Treino", "20:00"),
-                    ("Refeição 5: Ceia Anti-Catabólica", "22:30")
-                ]
-            else:
-                titulos_horarios = [
-                    ("Refeição 1: Pequeno-Almoço", "08:00"),
-                    ("Refeição 2: Colação da Manhã", "10:30"),
-                    ("Refeição 3: Almoço", "13:00"),
-                    ("Refeição 4: Pré-Treino Rápido", "16:30"),
-                    ("Refeição 5: Jantar Pós-Treino", "20:00"),
+                    ("Refeição 5: Jantar Recuperador", "20:30"),
                     ("Refeição 6: Ceia Noturna", "22:30")
                 ]
-        else:  # noite
+        elif horario_treino == "noite":
             if num_refeicoes == 3:
                 titulos_horarios = [
                     ("Pequeno-Almoço Equilibrado", "08:30"),
@@ -1345,26 +1244,42 @@ class ServicoCoachIA:
                     ("Refeição 3: Lanche / Pré-Treino Robusto", "18:00"),
                     ("Refeição 4: Jantar Pós-Treino Digestivo", "21:45")
                 ]
-            elif num_refeicoes == 5:
+            else:
                 titulos_horarios = [
                     ("Refeição 1: Pequeno-Almoço", "08:30"),
                     ("Refeição 2: Almoço", "12:30"),
                     ("Refeição 3: Lanche 1", "16:00"),
                     ("Refeição 4: Pré-Treino", "18:30"),
-                    ("Refeição 5: Jantar Pós-Treino Leve", "21:45")
+                    ("Refeição 5: Jantar Pós-Treino Leve", "21:45"),
+                    ("Refeição 6: Ceia", "23:00")
+                ]
+        else:  # tarde
+            if num_refeicoes == 3:
+                titulos_horarios = [
+                    ("Pequeno-Almoço Energético & Leve", "08:30"),
+                    ("Almoço Completo (Pré-Treino)", "12:30"),
+                    ("Jantar Pós-Treino Reparador", "20:30")
+                ]
+            elif num_refeicoes == 4:
+                titulos_horarios = [
+                    ("Refeição 1: Pequeno-Almoço Energético", "08:30"),
+                    ("Refeição 2: Almoço Sustentado", "12:30"),
+                    ("Refeição 3: Lanche Pré-Treino", "16:30"),
+                    ("Refeição 4: Jantar Pós-Treino Anabólico", "20:30")
                 ]
             else:
                 titulos_horarios = [
                     ("Refeição 1: Pequeno-Almoço", "08:00"),
-                    ("Refeição 2: Lanche Matinal", "11:00"),
-                    ("Refeição 3: Almoço", "13:30"),
-                    ("Refeição 4: Lanche da Tarde", "16:30"),
-                    ("Refeição 5: Pré-Treino Noturno", "19:00"),
-                    ("Refeição 6: Jantar Pós-Treino", "22:00")
+                    ("Refeição 2: Lanche da Manhã", "10:30"),
+                    ("Refeição 3: Almoço", "13:00"),
+                    ("Refeição 4: Pré-Treino Tarde", "16:30"),
+                    ("Refeição 5: Jantar Pós-Treino", "20:00"),
+                    ("Refeição 6: Ceia Noturna", "22:30")
                 ]
 
-        # Alimentos disponíveis respeitando evitados e preferidos
         def aceita(chave_alim: str) -> bool:
+            if chave_alim not in TABELA_ALIMENTOS_EQUIVALENCIAS:
+                return False
             nome_alimento = TABELA_ALIMENTOS_EQUIVALENCIAS[chave_alim]["nome"].lower()
             chave_low = chave_alim.lower()
             for ev in evitados.replace(",", ";").split(";"):
@@ -1373,42 +1288,35 @@ class ServicoCoachIA:
                     return False
             return True
 
-        # Gerar alimentos concretos para cada refeição
         refeicoes_geradas = []
         for idx, (titulo, horario) in enumerate(titulos_horarios[:num_refeicoes]):
             pct = pcts[idx]
-            refeicao_kcal = round(calorias * pct, 1)
             refeicao_p = round(proteina_alvo * pct, 1)
             refeicao_h = round(hidratos_alvo * pct, 1)
             refeicao_g = round(gordura_alvo * pct, 1)
 
             itens_alimento = []
 
-            # Se for refeição matinal
+            # Se for primeira refeição (Pequeno-Almoço)
             if idx == 0:
                 if pouco_apetite_manha:
-                    # Pequeno-almoço líquido/leve
-                    c_id = "aveia_em_flocos" if aceita("aveia_em_flocos") else ("banana" if aceita("banana") else "pao_integral")
-                    p_id = "whey_protein" if aceita("whey_protein") else ("iogurte_grego_skyr" if aceita("iogurte_grego_skyr") else "claras_ovo")
-                    f_id = "manteiga_amendoim" if (dificuldade_comer and aceita("manteiga_amendoim")) else "banana"
+                    c_id = "banana" if aceita("banana") else ("aveia_em_flocos" if aceita("aveia_em_flocos") else "pao_integral")
+                    p_id = "iogurte_grego_skyr" if aceita("iogurte_grego_skyr") else ("whey_protein" if aceita("whey_protein") else "claras_ovo")
+                    f_id = "aveia_em_flocos" if (c_id != "aveia_em_flocos" and aceita("aveia_em_flocos")) else "maca"
                 else:
                     c_id = "aveia_em_flocos" if aceita("aveia_em_flocos") else "pao_integral"
-                    p_id = "ovo_inteiro" if aceita("ovo_inteiro") else ("whey_protein" if aceita("whey_protein") else "queijo_fresco_light")
+                    p_id = "ovo_inteiro" if aceita("ovo_inteiro") else ("whey_protein" if aceita("whey_protein") else "iogurte_grego_skyr")
                     f_id = "banana" if aceita("banana") else "maca"
 
-                # Calcular gramagens aproximadas
                 c_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[c_id]
                 p_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[p_id]
-                f_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[f_id]
+                f_alim = TABELA_ALIMENTOS_EQUIVALENCIAS.get(f_id, c_alim)
 
-                # Gramas do carboidrato base
-                gramas_c = round(max(20.0, (refeicao_h * 0.65 / max(0.1, c_alim["hidratos"])) * 100), 0)
-                # Gramas da proteína base
+                gramas_c = round(max(20.0, (refeicao_h * 0.50 / max(0.1, c_alim["hidratos"])) * 100), 0)
                 gramas_p = round(max(25.0, (refeicao_p * 0.70 / max(0.1, p_alim["proteina"])) * 100), 0)
-                # Gramas da fruta/acompanhamento
-                gramas_f = 100.0 if "banana" in f_id or "maca" in f_id else 20.0
+                gramas_f = 100.0 if ("banana" in f_id or "maca" in f_id) else 30.0
 
-                for gid, galim, ggramas in [(c_id, c_alim, gramas_c), (p_id, p_alim, gramas_p), (f_id, f_alim, gramas_f)]:
+                for gid, galim, ggramas in [(p_id, p_alim, gramas_p), (c_id, c_alim, gramas_c), (f_id, f_alim, gramas_f)]:
                     itens_alimento.append({
                         "id_alimento": f"{gid}_{idx+1}",
                         "nome": galim["nome"],
@@ -1422,7 +1330,7 @@ class ServicoCoachIA:
 
             # Se for almoço ou jantar
             elif "Almoço" in titulo or "Jantar" in titulo:
-                # Escolher carboidrato
+                # Escolher fonte de amido principal
                 if "arroz" in preferidos and aceita("arroz_branco_cozido"):
                     c_id = "arroz_branco_cozido"
                 elif "batata" in preferidos and aceita("batata_doce_cozida"):
@@ -1432,13 +1340,7 @@ class ServicoCoachIA:
                 else:
                     c_id = "arroz_branco_cozido" if aceita("arroz_branco_cozido") else "batata_inglesa_cozida"
 
-                # Se está com dificuldade em comer arroz seco em volume alto
-                if "arroz" in dificeis and aceita("massa_cozida"):
-                    c_id = "massa_cozida"
-                elif "batata" in dificeis and aceita("arroz_branco_cozido"):
-                    c_id = "arroz_branco_cozido"
-
-                # Escolher proteína
+                # Escolher proteína principal
                 if "frango" in dificeis and aceita("carne_vaca_magra"):
                     p_id = "carne_vaca_magra"
                 elif "vaca" in preferidos and aceita("carne_vaca_magra"):
@@ -1448,7 +1350,7 @@ class ServicoCoachIA:
                 elif aceita("peito_frango_grelhado"):
                     p_id = "peito_frango_grelhado"
                 else:
-                    p_id = "peito_peru_grelhado" if aceita("peito_peru_grelhado") else "atum_natural"
+                    p_id = "atum_natural" if aceita("atum_natural") else "ovo_inteiro"
 
                 gord_id = "azeite_oliva" if aceita("azeite_oliva") else "abacate"
 
@@ -1456,9 +1358,19 @@ class ServicoCoachIA:
                 p_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[p_id]
                 g_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[gord_id]
 
-                gramas_c = round(max(50.0, (refeicao_h / max(0.1, c_alim["hidratos"])) * 100), 0)
-                gramas_p = round(max(50.0, (refeicao_p / max(0.1, p_alim["proteina"])) * 100), 0)
-                gramas_g = round(max(5.0, (refeicao_g * 0.70 / max(0.1, g_alim["gordura"])) * 100), 0)
+                # TETO FISIOLÓGICO: Nunca colocar porções gigantes de arroz (>180g para mulheres ou >240g para homens)
+                max_amido = 180.0 if (eh_mulher or peso_ref <= 60.0) else 240.0
+                gramas_c_bruto = round((refeicao_h / max(0.1, c_alim["hidratos"])) * 100.0, 0)
+
+                excesso_c = 0.0
+                if gramas_c_bruto > max_amido:
+                    excesso_c = gramas_c_bruto - max_amido
+                    gramas_c = max_amido
+                else:
+                    gramas_c = max(50.0, gramas_c_bruto)
+
+                gramas_p = round(max(50.0, (refeicao_p / max(0.1, p_alim["proteina"])) * 100.0), 0)
+                gramas_g = round(max(5.0, (refeicao_g * 0.75 / max(0.1, g_alim["gordura"])) * 100.0), 0)
 
                 for gid, galim, ggramas in [(p_id, p_alim, gramas_p), (c_id, c_alim, gramas_c), (gord_id, g_alim, gramas_g)]:
                     itens_alimento.append({
@@ -1472,7 +1384,24 @@ class ServicoCoachIA:
                         "consumido": False
                     })
 
-            # Lanche / Outras refeições
+                # Se havia excesso de hidratos que tornaria o arroz absurdo, adiciona uma fruta fresca saudável
+                if excesso_c > 20.0:
+                    fruta_id = "maca" if aceita("maca") else ("banana" if aceita("banana") else "mirtilos")
+                    fruta_alim = TABELA_ALIMENTOS_EQUIVALENCIAS[fruta_id]
+                    hc_sobra = (excesso_c / 100.0) * c_alim["hidratos"]
+                    g_fruta = round(min(160.0, max(80.0, (hc_sobra / max(0.1, fruta_alim["hidratos"])) * 100.0)), 0)
+                    itens_alimento.append({
+                        "id_alimento": f"{fruta_id}_{idx+1}_sobremesa",
+                        "nome": f"{fruta_alim['nome']} (Sobremesa / Fruta Fresca)",
+                        "gramas": float(g_fruta),
+                        "calorias": round((g_fruta / 100.0) * fruta_alim["kcal"], 1),
+                        "proteina_g": round((g_fruta / 100.0) * fruta_alim["proteina"], 1),
+                        "hidratos_g": round((g_fruta / 100.0) * fruta_alim["hidratos"], 1),
+                        "gordura_g": round((g_fruta / 100.0) * fruta_alim["gordura"], 1),
+                        "consumido": False
+                    })
+
+            # Lanche / Refeições intermediárias
             else:
                 p_id = "iogurte_grego_skyr" if aceita("iogurte_grego_skyr") else ("whey_protein" if aceita("whey_protein") else "claras_ovo")
                 c_id = "banana" if aceita("banana") else ("pao_integral" if aceita("pao_integral") else "aveia_em_flocos")
@@ -1484,7 +1413,7 @@ class ServicoCoachIA:
 
                 gramas_p = round(max(25.0, (refeicao_p * 0.7 / max(0.1, p_alim["proteina"])) * 100), 0)
                 gramas_c = round(max(30.0, (refeicao_h * 0.7 / max(0.1, c_alim["hidratos"])) * 100), 0)
-                gramas_g = 15.0 if "manteiga" in gord_id or "amendoas" in gord_id else 10.0
+                gramas_g = 15.0 if ("manteiga" in gord_id or "amendoas" in gord_id) else 10.0
 
                 for gid, galim, ggramas in [(p_id, p_alim, gramas_p), (c_id, c_alim, gramas_c), (gord_id, g_alim, gramas_g)]:
                     itens_alimento.append({
@@ -1498,7 +1427,6 @@ class ServicoCoachIA:
                         "consumido": False
                     })
 
-            # Recalcular totais reais da refeição somando os alimentos
             kcal_soma = round(sum(it["calorias"] for it in itens_alimento), 1)
             p_soma = round(sum(it["proteina_g"] for it in itens_alimento), 1)
             h_soma = round(sum(it["hidratos_g"] for it in itens_alimento), 1)
@@ -1515,9 +1443,7 @@ class ServicoCoachIA:
                 "alimentos": itens_alimento
             })
 
-        # Calibração estrita com o projeto ativo:
-        # Re-escalar milimetricamente as gramagens dos alimentos para que a soma real
-        # bata com rigor as calorias e macronutrientes exigidos pelo projeto (+/- 5 a 10 kcal).
+        # Calibração final proporcional
         kcal_soma_bruta = sum(r["calorias"] for r in refeicoes_geradas)
         if kcal_soma_bruta > 0 and abs(kcal_soma_bruta - calorias) > 10:
             fator_calorias = calorias / kcal_soma_bruta
@@ -1536,33 +1462,20 @@ class ServicoCoachIA:
                 r["hidratos_g"] = round(sum(it["hidratos_g"] for it in r["alimentos"]), 1)
                 r["gordura_g"] = round(sum(it["gordura_g"] for it in r["alimentos"]), 1)
 
-        # Totais diários calibrados com o projeto
         calorias_finais = round(sum(r["calorias"] for r in refeicoes_geradas), 1)
         proteina_final = round(sum(r["proteina_g"] for r in refeicoes_geradas), 1)
         hidratos_final = round(sum(r["hidratos_g"] for r in refeicoes_geradas), 1)
         gordura_final = round(sum(r["gordura_g"] for r in refeicoes_geradas), 1)
 
-        # Parecer fisiológico detalhado
         estrategia_fase = (
-            f"🎯 Sincronização Estrita com o Teu Projeto ({nome_fase or fase.upper()}):\n"
-            f"• Meta calórica rigorosamente calibrada para {calorias:.0f} kcal diárias ({proteina_final}g Proteína, {hidratos_final}g Hidratos, {gordura_final}g Gorduras).\n"
-            f"• Em {fase.upper()}, o rácio de proteína ({proteina_final / peso_ref:.1f}g/kg) assegura síntese proteica miofibrilar sem sobrecarga digestiva."
+            f"Sincronização com o Projeto ({nome_fase or fase.upper()} a {calorias:.0f} kcal): "
+            f"{proteina_final}g Proteína, {hidratos_final}g Hidratos, {gordura_final}g Gorduras ({gordura_final / peso_ref:.2f}g/kg)."
         )
-
-        ajuste_horario = (
-            f"⏰ Timing Nutricional Otimizado para Treino à {horario_treino.capitalize()}:\n"
-            f"• Refeição Pré-Treino formulada com hidratos de índice glicémico moderado/alto para rápida biodisponibilidade sem quebra de energia durante as séries.\n"
-            f"• Refeição Pós-Treino com absorção facilitada de aminoácidos essenciais (leucina) e reposição rápida do glicogénio gasto na sessão."
-        )
-
         ajustes_apetite = []
         if pouco_apetite_manha:
-            ajustes_apetite.append("• Apetite Matinal Baixo Respeitado: O Pequeno-Almoço foi aliviado (~12-15% das calorias diárias em formato líquido/fácil ingestão) e o volume calórico foi redistribuído para o almoço e jantar.")
-        else:
-            ajustes_apetite.append("• Distribuição equilibrada ao longo de todas as refeições sem picos excessivos de saciedade.")
-
-        if dificuldade_comer:
-            ajustes_apetite.append("• Dificuldade em Ingestão/Saciedade Corrigida: Alimentos secos ou de volume extremo foram substituídos por fontes de alta densidade calórica e rápida deglutição (azeite de oliva, manteiga de amendoim, iogurte ligeiro).")
+            ajustes_apetite.append("• Apetite Matinal Baixo Respeitado: Pequeno-Almoço formatado para digestão leve sem empanturramento.")
+        if excesso_c > 0:
+            ajustes_apetite.append("• Porções de Amido Equilibradas: O volume de arroz/massa por refeição foi limitado a porções digestivas (180g), sendo o restante balanço energético completado com fruta fresca.")
 
         return {
             "nome_plano": f"Plano Nutricional Adaptativo - {fase.capitalize()} ({num_refeicoes} Refeições)",
@@ -1572,8 +1485,8 @@ class ServicoCoachIA:
             "gordura_alvo_g": gordura_final,
             "fibras_alvo_g": 30.0,
             "estrategia_fase_projeto": estrategia_fase,
-            "ajuste_horario_treino": ajuste_horario,
-            "ajuste_apetite_e_saciedade": "\n".join(ajustes_apetite),
+            "ajuste_horario_treino": f"Timing nutricional otimizado para treino à {horario_treino.capitalize()}.",
+            "ajuste_apetite_e_saciedade": "\n".join(ajustes_apetite) if ajustes_apetite else "Refeições equilibradas.",
             "modo_demonstracao": True,
             "refeicoes": refeicoes_geradas
         }

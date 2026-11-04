@@ -66,8 +66,8 @@ export const GestorTreinos: React.FC = () => {
   const [pontosFracosIA, setPontosFracosIA] = useState<string>('');
   const [limitacoesIA, setLimitacoesIA] = useState<string>('');
   const [objetivoIA, setObjetivoIA] = useState<string>('hipertrofia');
-  const [objetivosDetalhadosIA, setObjetivosDetalhadosIA] = useState<string>('Máxima hipertrofia, mas com foco em força pesada nos 3 grandes (Supino, Agachamento e Peso Morto)');
-  const [atividadesSecundariasIA, setAtividadesSecundariasIA] = useState<string>('Boxe 1x por semana, Corrida 2x por semana');
+  const [objetivosDetalhadosIA, setObjetivosDetalhadosIA] = useState<string>('');
+  const [atividadesSecundariasIA, setAtividadesSecundariasIA] = useState<string>('');
   const [cadenciaDescansoIA, setCadenciaDescansoIA] = useState<string>('dias_fixos');
   const [planoAtualOuAnteriorIA, setPlanoAtualOuAnteriorIA] = useState<string>('');
   const [mostrarAuditoriaPlano, setMostrarAuditoriaPlano] = useState<boolean>(false);
@@ -2085,14 +2085,20 @@ export const GestorTreinos: React.FC = () => {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
                   />
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {['Tendinite Ombro', 'Dor Lombar', 'Dor Joelho', 'Nenhuma'].map((tag) => (
+                    {[
+                      { label: 'Pós-Cirúrgico / Mastectomia / Gânglios', text: 'Pós-cirúrgico: retirada de mama e gânglios axilares, braço com restrição' },
+                      { label: 'Tendinite Ombro', text: 'Tendinite no ombro / manguito rotador' },
+                      { label: 'Dor Lombar', text: 'Dor lombar / instabilidade de coluna' },
+                      { label: 'Dor Joelho', text: 'Sobrecarga patelofemoral / dor nos joelhos' },
+                      { label: 'Nenhuma', text: 'Nenhuma' }
+                    ].map((item) => (
                       <button
-                        key={tag}
+                        key={item.label}
                         type="button"
-                        onClick={() => setLesoesIA((prev) => (prev ? `${prev}, ${tag}` : tag))}
-                        className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-emerald-400 transition-colors"
+                        onClick={() => setLesoesIA((prev) => (prev && prev !== 'Nenhuma' ? `${prev}; ${item.text}` : item.text))}
+                        className="text-[11px] px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 hover:text-emerald-300 hover:bg-slate-700 transition-colors"
                       >
-                        +{tag}
+                        +{item.label}
                       </button>
                     ))}
                   </div>

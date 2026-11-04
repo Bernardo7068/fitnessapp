@@ -103,13 +103,13 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
     setSucesso(null);
     try {
       await ServicoApi.atualizarPerfil({
-        idade: Number(perfil.idade),
+        idade: Number(perfil.idade) || 25,
         sexo: perfil.sexo,
-        altura_cm: Number(perfil.altura_cm),
+        altura_cm: Number(perfil.altura_cm) || 170,
         nivel_experiencia: perfil.nivel_experiencia,
         nivel_atividade: perfil.nivel_atividade,
-        dias_treino_semana: Number(perfil.dias_treino_semana),
-        tempo_sessao_minutos: Number(perfil.tempo_sessao_minutos)
+        dias_treino_semana: Number(perfil.dias_treino_semana) || 0,
+        tempo_sessao_minutos: Number(perfil.tempo_sessao_minutos) || 0
       });
       setSucesso('Dados biométricos atualizados com sucesso!');
       setTimeout(() => setSucesso(null), 4000);
@@ -337,8 +337,11 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
                 type="number"
                 min="14"
                 max="95"
-                value={perfil.idade ?? 25}
-                onChange={(e) => setPerfil({ ...perfil, idade: parseInt(e.target.value) || 25 })}
+                value={perfil.idade !== undefined && perfil.idade !== null ? perfil.idade : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPerfil({ ...perfil, idade: val === '' ? ('' as any) : parseInt(val) });
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -361,8 +364,11 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
                 type="number"
                 min="120"
                 max="230"
-                value={perfil.altura_cm ?? 175}
-                onChange={(e) => setPerfil({ ...perfil, altura_cm: parseFloat(e.target.value) || 175 })}
+                value={perfil.altura_cm !== undefined && perfil.altura_cm !== null ? perfil.altura_cm : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPerfil({ ...perfil, altura_cm: val === '' ? ('' as any) : parseFloat(val) });
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -399,13 +405,16 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">Frequência Semanal Habitual</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">Frequência Semanal Habitual (dias)</label>
               <input
                 type="number"
-                min="2"
+                min="0"
                 max="7"
-                value={perfil.dias_treino_semana ?? 4}
-                onChange={(e) => setPerfil({ ...perfil, dias_treino_semana: parseInt(e.target.value) || 4 })}
+                value={perfil.dias_treino_semana !== undefined && perfil.dias_treino_semana !== null ? perfil.dias_treino_semana : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPerfil({ ...perfil, dias_treino_semana: val === '' ? ('' as any) : parseInt(val) });
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -414,11 +423,14 @@ export const PainelPerfil: React.FC<PropsPainelPerfil> = ({
               <label className="block text-xs font-bold text-slate-300 mb-1.5">Duração Média da Sessão (minutos)</label>
               <input
                 type="number"
-                min="30"
+                min="0"
                 max="180"
                 step="5"
-                value={perfil.tempo_sessao_minutos ?? 60}
-                onChange={(e) => setPerfil({ ...perfil, tempo_sessao_minutos: parseInt(e.target.value) || 60 })}
+                value={perfil.tempo_sessao_minutos !== undefined && perfil.tempo_sessao_minutos !== null ? perfil.tempo_sessao_minutos : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPerfil({ ...perfil, tempo_sessao_minutos: val === '' ? ('' as any) : parseInt(val) });
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
