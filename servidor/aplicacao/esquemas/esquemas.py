@@ -38,6 +38,7 @@ class EsquemaProjecaoRequisicao(BaseModel):
     nivel_atividade: str = "moderado"
     estrategia_inicial: str = "recomposicao"
     observacoes_contexto: Optional[str] = ""
+    taxa_semanal_alvo_kg: Optional[float] = None
 
 
 class EsquemaSubstituicaoRequisicao(BaseModel):
@@ -156,6 +157,7 @@ class EsquemaCriarProjeto(BaseModel):
     estrategia_inicial: Optional[str] = "recomposicao"
     observacoes_contexto: Optional[str] = ""
     duracao_total_semanas: Optional[int] = 12
+    taxa_semanal_alvo_kg: Optional[float] = None
     fases: List[Dict[str, Any]] = []
     relatorio_completo_json: Optional[str] = None
     ativar_imediatamente: bool = True

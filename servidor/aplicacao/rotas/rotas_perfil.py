@@ -374,7 +374,8 @@ def calcular_projecao(requisicao: EsquemaProjecaoRequisicao):
         nivel_experiencia=requisicao.nivel_experiencia,
         nivel_atividade=requisicao.nivel_atividade,
         estrategia_inicial=requisicao.estrategia_inicial,
-        observacoes_contexto=requisicao.observacoes_contexto or ""
+        observacoes_contexto=requisicao.observacoes_contexto or "",
+        taxa_semanal_alvo_kg=requisicao.taxa_semanal_alvo_kg
     )
     return relatorio
 
@@ -548,7 +549,8 @@ def criar_projeto(
             "tipo_intencao": novo_projeto.tipo_intencao,
             "peso_atual_kg": dados.peso_inicial_kg,
             "peso_alvo_kg": dados.peso_alvo_kg,
-            "observacoes_contexto": dados.observacoes_contexto or ""
+            "observacoes_contexto": dados.observacoes_contexto or "",
+            "taxa_semanal_alvo_kg": dados.taxa_semanal_alvo_kg
         }
         perfil.projeto_ativo_json = json.dumps(info_projeto)
         sessao.commit()

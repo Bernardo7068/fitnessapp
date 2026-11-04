@@ -66,7 +66,9 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
   const [sexo, setSexo] = useState<string>('masculino');
   const [nivelExperiencia, setNivelExperiencia] = useState<string>('intermediario');
   const [nivelAtividade, setNivelAtividade] = useState<string>('moderado');
-  const [estrategiaInicial, setEstrategiaInicial] = useState<string>('recomposicao');
+  const [estrategiaInicial, setEstrategiaInicial] = useState<string>('bulk_cut_atletico');
+  const [taxaSemanalAlvo, setTaxaSemanalAlvo] = useState<number>(0.30);
+  const [modoTaxaPersonalizada, setModoTaxaPersonalizada] = useState<boolean>(false);
   const [observacoesContexto, setObservacoesContexto] = useState<string>('');
 
   const [relatorioCalculado, setRelatorioCalculado] = useState<RelatorioProjetoMetas | null>(null);
@@ -136,6 +138,31 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
     }
   };
 
+  // Sincronizacao automatica da estrategia e taxa semanal de acordo com os pesos
+  useEffect(() => {
+    if (typeof pesoAtual !== 'number' || typeof pesoAlvo !== 'number' || isNaN(pesoAtual) || isNaN(pesoAlvo)) return;
+    if (pesoAlvo > pesoAtual) {
+      if (!['bulk_cut_atletico', 'lean_bulk_linear', 'retorno_reabilitacao_bulk'].includes(estrategiaInicial)) {
+        setEstrategiaInicial('bulk_cut_atletico');
+      }
+      if (!modoTaxaPersonalizada && (taxaSemanalAlvo <= 0 || taxaSemanalAlvo > 0.75)) {
+        setTaxaSemanalAlvo(0.30);
+      }
+    } else if (pesoAlvo < pesoAtual) {
+      if (!['cut_com_diet_breaks', 'cut_direto', 'retorno_reabilitacao_cut'].includes(estrategiaInicial)) {
+        setEstrategiaInicial('cut_com_diet_breaks');
+      }
+      if (!modoTaxaPersonalizada && (taxaSemanalAlvo <= 0 || taxaSemanalAlvo > 1.2)) {
+        setTaxaSemanalAlvo(0.50);
+      }
+    } else {
+      if (!['recomposicao', 'readaptacao_retorno', 'manutencao_metabolica'].includes(estrategiaInicial)) {
+        setEstrategiaInicial('recomposicao');
+      }
+      setTaxaSemanalAlvo(0.00);
+    }
+  }, [pesoAtual, pesoAlvo]);
+
   const atualizarSugestaoNome = () => {}; // Desativado para nao influenciar nem sobrepor o nome escolhido pelo atleta
 
   const handleCalcularENovoProjeto = async (e: React.FormEvent) => {
@@ -174,7 +201,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
         nivel_experiencia: nivelExperiencia,
         nivel_atividade: nivelAtividade,
         estrategia_inicial: estrategiaInicial,
-        observacoes_contexto: observacoesContexto
+        observacoes_contexto: observacoesContexto,
+        taxa_semanal_alvo_kg: taxaSemanalAlvo
       });
       setRelatorioCalculado(resProj);
 
@@ -193,7 +221,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
         duracao_total_semanas: resProj.semanas_totais_estimadas,
         fases: resProj.fases || [],
         relatorio_completo_json: JSON.stringify(resProj),
-        ativar_imediatamente: ativarImediatamente
+        ativar_imediatamente: ativarImediatamente,
+        taxa_semanal_alvo_kg: taxaSemanalAlvo
       });
 
       // 4. Recarregar lista de projetos
@@ -1517,154 +1546,508 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
             </div>
 
             {/* Estratégia Fisiológica & Periodização */}
-            <div className="space-y-3 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-semibold text-slate-300">
-                Estratégia Fisiológica & Periodização:
-              </label>
+            <div className="space-y-4 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-200">
+                  Estratégia Fisiológica & Periodização:
+                </label>
+                <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">
+                  {Number(pesoAlvo) > Number(pesoAtual)
+                    ? '🎯 Meta de Ganho de Massa'
+                    : Number(pesoAlvo) < Number(pesoAtual)
+                      ? '🎯 Meta de Perda de Gordura'
+                      : '🎯 Meta de Recomposição'}
+                </span>
+              </div>
 
-              {pesoAlvo < pesoAtual ? (
-                <div className="space-y-2">
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
-                      : 'bg-slate-950 border-slate-800'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="cut_com_diet_breaks"
-                        checked={estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'}
-                        onChange={() => setEstrategiaInicial('cut_com_diet_breaks')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🟢 Cut Estruturado com Diet Breaks ({pesoAtual}kg → {pesoAlvo}kg)
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      Défice progressivo seguro (-500 kcal/dia) com pausas de manutenção metabólica para preservar massa muscular e evitar estagnação.
-                    </p>
-                  </label>
-
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'cut_direto'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
-                      : 'bg-slate-950 border-slate-800'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="cut_direto"
-                        checked={estrategiaInicial === 'cut_direto'}
-                        onChange={() => setEstrategiaInicial('cut_direto')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        ⚡ Cut Linear Direto (Sem pausas de manutenção)
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      Défice contínuo linear para reduções de peso mais céleres.
-                    </p>
-                  </label>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
-                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="lean_bulk_linear"
-                        checked={estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'}
-                        onChange={() => setEstrategiaInicial('lean_bulk_linear')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🟢 Lean Bulk Linear (Progressivo & Direto)
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      Superávit calórico controlado (+250 kcal) subindo limpo direto até aos {pesoAlvo}kg com fase de consolidação metabólica.
-                    </p>
-                  </label>
-
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+              {/* CENÁRIO 1: GANHAR PESO (pesoAlvo > pesoAtual) */}
+              {Number(pesoAlvo) > Number(pesoAtual) && (
+                <div className="space-y-2.5">
+                  {/* Opção 1: Bulk & Cut Atlético */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
                     estrategiaInicial === 'bulk_cut_atletico'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                       : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                   }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="bulk_cut_atletico"
-                        checked={estrategiaInicial === 'bulk_cut_atletico'}
-                        onChange={() => setEstrategiaInicial('bulk_cut_atletico')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🏆 Bulk & Cut Atlético (Sobrecarga de Lastro + Mini-Cut Final)
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="bulk_cut_atletico"
+                          checked={estrategiaInicial === 'bulk_cut_atletico'}
+                          onChange={() => setEstrategiaInicial('bulk_cut_atletico')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🏆 Bulk & Cut Atlético (Ganho de Força + Queima Final de Gordura)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold shrink-0">
+                        Atletas / Estética Máxima
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      Periodização de atleta: sobrecarga de lastro até {Number(pesoAlvo) + 3}kg (+3kg), descompressão metabólica e cut final de lapidação para atingir os {pesoAlvo}kg com {bfAlvo}% BF seco.
-                    </p>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Constrói o máximo de massa muscular subindo até aos {Number(pesoAlvo) + 3}kg com lastro anabólico, seguido de um corte rápido de gordura para terminares nos {pesoAlvo}kg seco e com abdominais visíveis.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Ganhas volume muscular com sobra de energia e depois queimas a gordura acumulada, garantindo que o peso final é puro músculo.
+                      </p>
+                    </div>
                   </label>
 
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                  {/* Opção 2: Lean Bulk Linear */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="lean_bulk_linear"
+                          checked={estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'}
+                          onChange={() => setEstrategiaInicial('lean_bulk_linear')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🟢 Lean Bulk Linear (Ganho Contínuo e Sem Gordura)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                        Ganho Limpo & Direto
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Subida de peso progressiva e controlada direto aos {pesoAlvo}kg com superávit moderado, minimizando o ganho de gordura ao longo das semanas.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Para quem quer crescer devagar e com segurança, sem oscilações e sem necessidade de fazer dietas restritivas a seguir.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Opção 3: Retorno / Reabilitação + Bulk */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
                     estrategiaInicial === 'retorno_reabilitacao_bulk'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                       : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                   }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="retorno_reabilitacao_bulk"
-                        checked={estrategiaInicial === 'retorno_reabilitacao_bulk'}
-                        onChange={() => setEstrategiaInicial('retorno_reabilitacao_bulk')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🛡️ Retorno / Reabilitação + Bulk (Pós-Lesão ou Paragem Prolongada)
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="retorno_reabilitacao_bulk"
+                          checked={estrategiaInicial === 'retorno_reabilitacao_bulk'}
+                          onChange={() => setEstrategiaInicial('retorno_reabilitacao_bulk')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🛡️ Retorno & Reabilitação + Bulk (Readaptação Articular Inicial)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
+                        Pós-Lesão ou Paragem
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      Inicia com 4 a 6 semanas de readaptação neuromuscular no peso atual ({pesoAtual}kg, RPE ≤ 7.0, proteção de tendões e manguito) antes do superávit calórico progressivo.
-                    </p>
-                  </label>
-
-                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'recomposicao'
-                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
-                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="recomposicao"
-                        checked={estrategiaInicial === 'recomposicao'}
-                        onChange={() => setEstrategiaInicial('recomposicao')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🔄 Recomposição Inicial (Priming Metabólico) + Bulk
-                      </span>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Inicia com 4 a 6 semanas no teu peso atual ({pesoAtual}kg, RPE ≤ 7.0, proteção de tendões e manguito) antes de iniciar a subida progressiva de cargas e calorias.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Se estiveste lesionado ou parado há meses, o corpo reaprende os movimentos e lubrifica as articulações antes de puxar peso pesado.
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1 pl-5">
-                      6 a 8 semanas no peso atual para aumentar sensibilidade à insulina e densidade muscular antes da subida calórica.
-                    </p>
                   </label>
                 </div>
               )}
+
+              {/* CENÁRIO 2: PERDER PESO (pesoAlvo < pesoAtual) */}
+              {Number(pesoAlvo) < Number(pesoAtual) && (
+                <div className="space-y-2.5">
+                  {/* Opção 1: Cut Estruturado com Diet Breaks */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="cut_com_diet_breaks"
+                          checked={estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'}
+                          onChange={() => setEstrategiaInicial('cut_com_diet_breaks')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🟢 Cutting Estruturado com Diet Breaks (Perda de Gordura com Pausas)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                        Recomendado / Preserva Músculo
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Défice calórico seguro para queimar gordura com semanas programadas de descanso alimentar em manutenção para reativar o metabolismo e proteger a massa muscular.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Emagreces sem desacelerar a tiróide nem perder força. As pausas impedem que o teu corpo estagne.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Opção 2: Cut Linear Direto */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'cut_direto'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="cut_direto"
+                          checked={estrategiaInicial === 'cut_direto'}
+                          onChange={() => setEstrategiaInicial('cut_direto')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          ⚡ Cutting Linear Direto (Défice Contínuo)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold shrink-0">
+                        Definição Mais Rápida
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Défice contínuo linear sem interrupções até atingir os {pesoAlvo}kg. Redução de peso focada e objetiva.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Se tens um prazo ou queres atingir a meta mais rapidamente, este plano mantém o défice direto semana após semana.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Opção 3: Retorno / Reabilitação + Cutting */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'retorno_reabilitacao_cut'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="retorno_reabilitacao_cut"
+                          checked={estrategiaInicial === 'retorno_reabilitacao_cut'}
+                          onChange={() => setEstrategiaInicial('retorno_reabilitacao_cut')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🛡️ Retorno & Reabilitação + Cutting (Readaptação Articular Prévia)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
+                        Recuperação + Definição
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Fase preparatória de 4 semanas no peso atual para recuperar mobilidade articular e tônus motor antes de iniciar o corte calórico.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Evita dores ou lesões ao voltar a treinar em défice. O corpo fortalece-se primeiro e emagrece a seguir.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* CENÁRIO 3: MANTER PESO / RECOMPOSIÇÃO (pesoAlvo === pesoAtual) */}
+              {Number(pesoAlvo) === Number(pesoAtual) && (
+                <div className="space-y-2.5">
+                  {/* Opção 1: Recomposição Corporal Pura */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'recomposicao'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="recomposicao"
+                          checked={estrategiaInicial === 'recomposicao'}
+                          onChange={() => setEstrategiaInicial('recomposicao')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🔄 Recomposição Corporal Pura (Trocar Gordura por Músculo)
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                        Mesmo Peso / Mais Seco
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Mantém exatamente os {pesoAtual}kg na balança, queimando gordura e construindo massa magra simultaneamente através de calorias isocalóricas e alta proteína.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> O teu peso não mexe, mas a tua cintura diminui e os teus ombros e braços ficam mais densos e definidos.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Opção 2: Readaptação Neuromuscular */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'readaptacao_retorno'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="readaptacao_retorno"
+                          checked={estrategiaInicial === 'readaptacao_retorno'}
+                          onChange={() => setEstrategiaInicial('readaptacao_retorno')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          🛡️ Readaptação Neuromuscular & Proteção Articular
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[10px] font-bold shrink-0">
+                        Pós-Lesão ou Paragem
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Recuperação do padrão motor, tendões e mobilidade sob esforço controlado (RPE ≤ 7.0) sem mexer no peso corporal.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Voltar a treinar sem dores nos ombros, costas ou joelhos, preparando as estruturas para quando quiseres evoluir.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Opção 3: Manutenção Metabólica */}
+                  <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'manutencao_metabolica'
+                      ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="estrategia"
+                          value="manutencao_metabolica"
+                          checked={estrategiaInicial === 'manutencao_metabolica'}
+                          onChange={() => setEstrategiaInicial('manutencao_metabolica')}
+                          className="accent-emerald-500 mt-0.5"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          ⚡ Manutenção Metabólica & Performance
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10px] font-bold shrink-0">
+                        Estabilidade & Força
+                      </span>
+                    </div>
+                    <div className="pl-6 mt-1.5 space-y-1">
+                      <p className="text-xs text-slate-300 font-medium">
+                        Fixação rígida do peso corporal para maximizar a energia nos treinos diários, recuperação e rendimento desportivo sustentável.
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Nem secar nem engordar. Comer bem, recuperar a 100% e treinar com energia máxima no ginásio.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* SELETOR DE RITMO SEMANAL (VELOCIDADE DO PROCESSO) */}
+              {/* ========================================================= */}
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-emerald-400" />
+                    Velocidade do Ritmo Semanal (kg/semana):
+                  </label>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black">
+                    {Number(pesoAlvo) > Number(pesoAtual)
+                      ? `+${taxaSemanalAlvo.toFixed(2)} kg/sem`
+                      : Number(pesoAlvo) < Number(pesoAtual)
+                        ? `-${Math.abs(taxaSemanalAlvo).toFixed(2)} kg/sem`
+                        : '0.00 kg/sem (Estável)'}
+                  </span>
+                </div>
+
+                {Number(pesoAlvo) > Number(pesoAtual) ? (
+                  // Opções de Ritmo para Bulk
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.15); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.15 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">+0.15 kg/sem</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">Ultra-Limpo</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+150 kcal/dia</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.30); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.30 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">+0.30 kg/sem</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">⭐ Recomendado</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+300 kcal/dia</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.50); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.50 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">+0.50 kg/sem</div>
+                        <div className="text-[10px] text-amber-400 font-semibold">🔥 Hardgainer</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+500 kcal/dia</div>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/60">
+                      <div className="flex items-center justify-between text-xs text-slate-300 mb-1.5">
+                        <span className="font-semibold">Ajuste fino personalizado:</span>
+                        <span className="font-mono text-emerald-400 font-bold">+{taxaSemanalAlvo.toFixed(2)} kg/semana</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.10"
+                        max="0.75"
+                        step="0.05"
+                        value={taxaSemanalAlvo}
+                        onChange={(e) => {
+                          setTaxaSemanalAlvo(parseFloat(e.target.value));
+                          setModoTaxaPersonalizada(true);
+                        }}
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                ) : Number(pesoAlvo) < Number(pesoAtual) ? (
+                  // Opções de Ritmo para Cut
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.35); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.35 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">-0.35 kg/sem</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">Preservação</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~-350 kcal/dia</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.50); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.50 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">-0.50 kg/sem</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">⭐ Padrão Ouro</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~-500 kcal/dia</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setTaxaSemanalAlvo(0.75); setModoTaxaPersonalizada(false); }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          taxaSemanalAlvo === 0.75 && !modoTaxaPersonalizada
+                            ? 'bg-emerald-950/60 border-emerald-500 ring-1 ring-emerald-500/40'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold text-white">-0.75 kg/sem</div>
+                        <div className="text-[10px] text-amber-400 font-semibold">⚡ Acelerado</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~-750 kcal/dia</div>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/60">
+                      <div className="flex items-center justify-between text-xs text-slate-300 mb-1.5">
+                        <span className="font-semibold">Ajuste fino personalizado:</span>
+                        <span className="font-mono text-emerald-400 font-bold">-{taxaSemanalAlvo.toFixed(2)} kg/semana</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.20"
+                        max="1.10"
+                        step="0.05"
+                        value={taxaSemanalAlvo}
+                        onChange={(e) => {
+                          setTaxaSemanalAlvo(parseFloat(e.target.value));
+                          setModoTaxaPersonalizada(true);
+                        }}
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // Manutenção
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Em recomposição ou manutenção o peso alvo semanal é de <strong>0.00 kg</strong> (isocalórico).</span>
+                  </div>
+                )}
+
+                <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-[11px] text-emerald-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5" /> Sincronização Automática com o Check-in:
+                  </div>
+                  <p className="text-slate-300 text-[10px] leading-relaxed">
+                    O nosso check-up semanal usará esta taxa exata como referência ({Number(pesoAlvo) > Number(pesoAtual) ? `+${taxaSemanalAlvo.toFixed(2)}` : Number(pesoAlvo) < Number(pesoAtual) ? `-${Math.abs(taxaSemanalAlvo).toFixed(2)}` : '0.00'} kg/sem). Se cumprires esta taxa, o algoritmo valida e não corta as tuas calorias. Podes recalibrar a qualquer momento aqui na app!
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Observações de Contexto, Lesões e Histórico Clínico */}

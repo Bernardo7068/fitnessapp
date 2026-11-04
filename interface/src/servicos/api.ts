@@ -144,6 +144,7 @@ export const ServicoApi = {
     nivel_atividade: string;
     estrategia_inicial?: string;
     observacoes_contexto?: string;
+    taxa_semanal_alvo_kg?: number;
   }): Promise<RelatorioProjetoMetas> {
     const res = await fetchComAuth(`${API_BASE}/perfil/calcular-projecao`, {
       method: 'POST',
@@ -197,6 +198,7 @@ export const ServicoApi = {
     estrategia_inicial?: string;
     observacoes_contexto?: string;
     duracao_total_semanas?: number;
+    taxa_semanal_alvo_kg?: number;
     fases: any[];
     relatorio_completo_json?: string;
     ativar_imediatamente?: boolean;

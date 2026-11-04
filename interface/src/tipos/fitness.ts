@@ -55,6 +55,7 @@ export interface FaseProjeto {
   series_trabalho_semana: number;
   descricao_estrategia: string;
   foco_treino?: string;
+  taxa_semanal_alvo_kg?: number;
 }
 
 export interface RelatorioProjetoMetas {
@@ -76,6 +77,7 @@ export interface RelatorioProjetoMetas {
   diagnostico_fisiologico?: string;
   observacoes_contexto?: string;
   bloqueio_bulk_por_bf?: boolean;
+  taxa_semanal_alvo_kg?: number;
   fases: FaseProjeto[];
 }
 
@@ -92,6 +94,7 @@ export interface ProjetoFisiologicoItem {
   bf_alvo: number;
   estrategia_inicial: string;
   observacoes_contexto?: string;
+  taxa_semanal_alvo_kg?: number;
   duracao_total_semanas: number;
   fase_atual_tipo: string;
   fase_atual_nome: string;

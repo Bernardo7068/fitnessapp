@@ -56,7 +56,8 @@ def analisar_e_ajustar_dieta(
     semanas_em_defice_continuo: int = 0,
     nivel_fadiga: int = 5,  # Escala 1 a 10
     progresso_treino: str = "aumentou",  # "aumentou", "manteve", "estagnado", "caiu"
-    tentativas_estagnadas_treino: int = 0
+    tentativas_estagnadas_treino: int = 0,
+    taxa_semanal_alvo_kg: Optional[float] = None
 ) -> DiagnosticoAjusteDieta:
     """
     Algoritmo matemático de calibração adaptativa cruzada.
@@ -229,8 +230,37 @@ def analisar_e_ajustar_dieta(
                 if adesao_percentual >= 80.0 else
                 "O peso recuou porque a ingestão calórica real ficou aquém da meta estabelecida."
             )
+        elif taxa_semanal_alvo_kg is not None and taxa_semanal_alvo_kg > 0:
+            meta_alvo = float(taxa_semanal_alvo_kg)
+            limite_superior = round(meta_alvo + 0.20, 2)
+            limite_inferior = round(max(0.05, meta_alvo * 0.35), 2)
+
+            if variacao_peso < limite_inferior:
+                alerta_estagnacao = True
+                if adesao_percentual >= 80.0:
+                    diferenca_kcal = +150.0
+                    novas_calorias = calorias_atuais + diferenca_kcal
+                    motivo = (
+                        f"Ganho semanal de {variacao_peso:+.2f} kg ficou abaixo da tua meta planeada de +{meta_alvo:.2f} kg/semana. "
+                        "Aumentamos o excedente em +150 kcal/dia para apoiar o ritmo anabólico desejado."
+                    )
+                else:
+                    motivo = f"O peso subiu {variacao_peso:+.2f} kg porque a adesão calórica ({adesao_percentual:.0f}%) ficou abaixo do prescrito."
+            elif variacao_peso > limite_superior:
+                diferenca_kcal = -150.0
+                novas_calorias = calorias_atuais + diferenca_kcal
+                motivo = (
+                    f"Ganho acelerado de {variacao_peso:+.2f} kg, superando a tua meta planeada de +{meta_alvo:.2f} kg/semana. "
+                    "Para evitar acúmulo desnecessário de gordura, calibramos o excedente com -150 kcal/dia."
+                )
+            else:
+                motivo = (
+                    f"Ritmo perfeito de ganho de massa: {variacao_peso:+.2f} kg esta semana, "
+                    f"perfeitamente alinhado com a tua meta personalizada de +{meta_alvo:.2f} kg/semana. "
+                    "Manter o plano calórico e focar na sobrecarga progressiva."
+                )
         elif taxa_percentual <= 0.05:
-            # Estagnação em bulk
+            # Estagnação em bulk padrão
             alerta_estagnacao = True
             if adesao_percentual >= 80.0:
                 diferenca_kcal = +150.0
@@ -242,7 +272,7 @@ def analisar_e_ajustar_dieta(
             else:
                 motivo = "O peso não subiu porque a ingestão calórica real ficou abaixo da meta."
         elif taxa_percentual > 0.60:
-            # Ganho rápido demais
+            # Ganho rápido demais padrão
             diferenca_kcal = -150.0
             novas_calorias = calorias_atuais + diferenca_kcal
             motivo = (

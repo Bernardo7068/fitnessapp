@@ -162,6 +162,21 @@ async def processar_checkin_semanal(
 
     calorias_atuais_efetivas = dados.calorias_atuais or (perfil.calorias_atuais if perfil else 2000.0)
 
+    # Extrair informações do projeto ativo e taxa semanal da fase antes de chamar o motor matemático
+    taxa_semanal_alvo = None
+    if perfil and perfil.projeto_ativo_json:
+        try:
+            info_proj_tmp = json.loads(perfil.projeto_ativo_json)
+            fases_tmp = info_proj_tmp.get("fases", [])
+            for f in fases_tmp:
+                if f.get("tipo") == fase_efetiva or f.get("nome_exibicao") == (dados.nome_fase_projeto or ""):
+                    taxa_semanal_alvo = f.get("taxa_semanal_alvo_kg")
+                    break
+            if taxa_semanal_alvo is None:
+                taxa_semanal_alvo = info_proj_tmp.get("taxa_semanal_alvo_kg")
+        except Exception:
+            pass
+
     diagnostico_mat = analisar_e_ajustar_dieta(
         peso_medio_anterior=peso_ant,
         peso_medio_atual=dados.peso_medio_atual,
@@ -171,7 +186,8 @@ async def processar_checkin_semanal(
         semanas_em_defice_continuo=dados.semanas_em_defice_continuo,
         nivel_fadiga=dados.nivel_fadiga,
         progresso_treino=dados.progresso_treino,
-        tentativas_estagnadas_treino=dados.tentativas_estagnadas_treino
+        tentativas_estagnadas_treino=dados.tentativas_estagnadas_treino,
+        taxa_semanal_alvo_kg=taxa_semanal_alvo
     )
 
     # Extrair informações do projeto ativo
