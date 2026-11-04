@@ -623,7 +623,7 @@ def projetar_trajetoria_meta(
         # =========================================================================
         # ESTRATÉGIA 2: RETORNO / REABILITAÇÃO + BULK
         # =========================================================================
-        elif estrategia_inicial in ["retorno_reabilitacao_bulk", "readaptacao_bulk"] or (tem_paragem_ou_lesao and estrategia_inicial not in ["lean_bulk_linear", "bulk_direto"]):
+        elif estrategia_inicial in ["retorno_reabilitacao_bulk", "readaptacao_bulk"] or (tem_paragem_ou_lesao and estrategia_inicial not in ["bulk_linear", "lean_bulk_linear", "bulk_direto"]):
             diagnostico = (
                 f"Intenção: Retorno & Reabilitação + Lean Bulk ({peso_atual} kg -> {peso_alvo} kg). "
                 f"Contexto individual considerado: '{observacoes_contexto}'. "
@@ -721,16 +721,18 @@ def projetar_trajetoria_meta(
             semanas_acumuladas += 4
 
         # =========================================================================
-        # ESTRATÉGIA 3: LEAN BULK LINEAR (DIRETO E PROGRESSIVO)
+        # ESTRATÉGIA 3: BULK LINEAR (DIRETO E PROGRESSIVO)
         # =========================================================================
         else:
+            tipo_bulk_nome = "Lean Bulk Linear (Limpo)" if taxa_ganho <= 0.35 else "Bulk Linear Acelerado"
             diagnostico = (
-                f"Intenção: Lean Bulk Linear ({peso_atual} kg -> {peso_alvo} kg). "
-                f"Progressão contínua e controlada até aos {peso_alvo} kg com taxa de {taxa_ganho:.2f} kg/semana "
+                f"Intenção: Bulk Linear ({peso_atual} kg -> {peso_alvo} kg). "
+                f"Progressão contínua direto até aos {peso_alvo} kg com taxa de {taxa_ganho:.2f} kg/semana "
+                f"({'foco em ganho limpo minimizando gordura' if taxa_ganho <= 0.35 else 'ritmo acelerado com maior excedente calórico'}) "
                 f"e superávit de +{superavit_base:.0f} kcal/dia, seguido de fase de consolidação metabólica."
             )
             delta_bulk = round(peso_alvo - peso_cursor, 1)
-            semanas_bulk = max(8, int(round(delta_bulk / taxa_ganho)))
+            semanas_bulk = max(6, int(round(delta_bulk / taxa_ganho)))
             tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
             calorias_f1 = round(tdee_f1 + superavit_base, 0)
             bf_estimado_f1 = round(min(bf_alvo + 2.0, bf_cursor + (delta_bulk * 0.30)), 1)
@@ -738,7 +740,7 @@ def projetar_trajetoria_meta(
             fases.append(FaseProjeto(
                 numero_fase=fase_num,
                 tipo="bulk_direto",
-                nome_exibicao=f"Fase 1: Lean Bulk Linear ({peso_cursor} kg -> {peso_alvo} kg)",
+                nome_exibicao=f"Fase 1: {tipo_bulk_nome} ({peso_cursor} kg -> {peso_alvo} kg)",
                 duracao_semanas=semanas_bulk,
                 peso_inicio_kg=peso_cursor,
                 peso_fim_estimado_kg=peso_alvo,

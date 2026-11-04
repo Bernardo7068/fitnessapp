@@ -142,7 +142,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
   useEffect(() => {
     if (typeof pesoAtual !== 'number' || typeof pesoAlvo !== 'number' || isNaN(pesoAtual) || isNaN(pesoAlvo)) return;
     if (pesoAlvo > pesoAtual) {
-      if (!['bulk_cut_atletico', 'lean_bulk_linear', 'retorno_reabilitacao_bulk'].includes(estrategiaInicial)) {
+      if (!['bulk_cut_atletico', 'bulk_linear', 'lean_bulk_linear', 'retorno_reabilitacao_bulk'].includes(estrategiaInicial)) {
         setEstrategiaInicial('bulk_cut_atletico');
       }
       if (!modoTaxaPersonalizada && (taxaSemanalAlvo <= 0 || taxaSemanalAlvo > 0.75)) {
@@ -1597,9 +1597,9 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                     </div>
                   </label>
 
-                  {/* Opção 2: Lean Bulk Linear */}
+                  {/* Opção 2: Bulk Linear */}
                   <label className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'
+                    estrategiaInicial === 'bulk_linear' || estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'
                       ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                       : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                   }`}>
@@ -1608,25 +1608,25 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         <input
                           type="radio"
                           name="estrategia"
-                          value="lean_bulk_linear"
-                          checked={estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'}
-                          onChange={() => setEstrategiaInicial('lean_bulk_linear')}
+                          value="bulk_linear"
+                          checked={estrategiaInicial === 'bulk_linear' || estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'}
+                          onChange={() => setEstrategiaInicial('bulk_linear')}
                           className="accent-emerald-500 mt-0.5"
                         />
                         <span className="text-xs font-bold text-white">
-                          🟢 Lean Bulk Linear (Ganho Contínuo e Sem Gordura)
+                          🟢 Bulk Linear (Subida Direta até à Meta)
                         </span>
                       </div>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
-                        Ganho Limpo & Direto
+                        Subida Direta
                       </span>
                     </div>
                     <div className="pl-6 mt-1.5 space-y-1">
                       <p className="text-xs text-slate-300 font-medium">
-                        Subida de peso progressiva e controlada direto aos {pesoAlvo}kg com superávit moderado, minimizando o ganho de gordura ao longo das semanas.
+                        Subida contínua de peso direto até aos {pesoAlvo}kg. Podes definir a velocidade semanal logo abaixo (de um ganho limpo/lean até um ganho mais rápido/pesado).
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        💡 <strong className="text-slate-300">Em termos simples:</strong> Para quem quer crescer devagar e com segurança, sem oscilações e sem necessidade de fazer dietas restritivas a seguir.
+                        💡 <strong className="text-slate-300">Em termos simples:</strong> Ganhas peso sem oscilações até à meta, escolhendo no seletor abaixo se queres subir devagar e limpo ou de forma mais rápida.
                       </p>
                     </div>
                   </label>
@@ -1890,13 +1890,24 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                     <Scale className="w-4 h-4 text-emerald-400" />
                     Velocidade do Ritmo Semanal (kg/semana):
                   </label>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black">
-                    {Number(pesoAlvo) > Number(pesoAtual)
-                      ? `+${taxaSemanalAlvo.toFixed(2)} kg/sem`
-                      : Number(pesoAlvo) < Number(pesoAtual)
-                        ? `-${Math.abs(taxaSemanalAlvo).toFixed(2)} kg/sem`
-                        : '0.00 kg/sem (Estável)'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {Number(pesoAlvo) > Number(pesoAtual) && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                        taxaSemanalAlvo <= 0.35
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                          : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
+                      }`}>
+                        {taxaSemanalAlvo <= 0.20 ? 'Lean Bulk (Ultra-Limpo)' : taxaSemanalAlvo <= 0.35 ? 'Lean Bulk (Recomendado)' : taxaSemanalAlvo <= 0.50 ? 'Bulk Moderado' : 'Bulk Agressivo / Pesado'}
+                      </span>
+                    )}
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black">
+                      {Number(pesoAlvo) > Number(pesoAtual)
+                        ? `+${taxaSemanalAlvo.toFixed(2)} kg/sem`
+                        : Number(pesoAlvo) < Number(pesoAtual)
+                          ? `-${Math.abs(taxaSemanalAlvo).toFixed(2)} kg/sem`
+                          : '0.00 kg/sem (Estável)'}
+                    </span>
+                  </div>
                 </div>
 
                 {Number(pesoAlvo) > Number(pesoAtual) ? (
@@ -1913,8 +1924,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         }`}
                       >
                         <div className="text-[11px] font-bold text-white">+0.15 kg/sem</div>
-                        <div className="text-[10px] text-emerald-400 font-semibold">Ultra-Limpo</div>
-                        <div className="text-[9px] text-slate-400 mt-0.5">~+150 kcal/dia</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">Lean Ultra-Limpo</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+150 kcal/dia · Músculo</div>
                       </button>
 
                       <button
@@ -1927,8 +1938,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         }`}
                       >
                         <div className="text-[11px] font-bold text-white">+0.30 kg/sem</div>
-                        <div className="text-[10px] text-emerald-400 font-semibold">⭐ Recomendado</div>
-                        <div className="text-[9px] text-slate-400 mt-0.5">~+300 kcal/dia</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">⭐ Lean Padrão</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+300 kcal/dia · Equilíbrio</div>
                       </button>
 
                       <button
@@ -1941,8 +1952,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         }`}
                       >
                         <div className="text-[11px] font-bold text-white">+0.50 kg/sem</div>
-                        <div className="text-[10px] text-amber-400 font-semibold">🔥 Hardgainer</div>
-                        <div className="text-[9px] text-slate-400 mt-0.5">~+500 kcal/dia</div>
+                        <div className="text-[10px] text-amber-400 font-semibold">🔥 Bulk Agressivo</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">~+500 kcal/dia · Hardgainer</div>
                       </button>
                     </div>
 
@@ -1963,6 +1974,15 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         }}
                         className="w-full accent-emerald-500 cursor-pointer"
                       />
+                      {taxaSemanalAlvo > 0.35 ? (
+                        <p className="text-[10px] text-amber-300/90 mt-1 flex items-center gap-1">
+                          ⚠️ <span>Ritmo acima de 0.35 kg/sem: ultrapassa o teto natural de síntese de músculo (~0.25 kg/sem); é esperado ganho associado de gordura.</span>
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-emerald-400/90 mt-1 flex items-center gap-1">
+                          ✓ <span>Ritmo Lean (Limpo): focado em ganho máximo de massa muscular com acumulação mínima de gordura.</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : Number(pesoAlvo) < Number(pesoAtual) ? (
