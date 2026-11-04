@@ -74,6 +74,7 @@ export interface RelatorioProjetoMetas {
   estrategia_inicial?: string;
   tipo_intencao?: string;
   diagnostico_fisiologico?: string;
+  observacoes_contexto?: string;
   bloqueio_bulk_por_bf?: boolean;
   fases: FaseProjeto[];
 }
@@ -90,6 +91,7 @@ export interface ProjetoFisiologicoItem {
   bf_inicial: number;
   bf_alvo: number;
   estrategia_inicial: string;
+  observacoes_contexto?: string;
   duracao_total_semanas: number;
   fase_atual_tipo: string;
   fase_atual_nome: string;

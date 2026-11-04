@@ -52,6 +52,7 @@ class RelatorioProjetoMetas:
     estrategia_inicial: str
     tipo_intencao: str  # "perda_peso", "ganho_peso", "recomposicao_mesmo_peso", "intervencao_bf_alto"
     diagnostico_fisiologico: str
+    observacoes_contexto: str = ""
     bloqueio_bulk_por_bf: bool = False
     fases: List[FaseProjeto] = field(default_factory=list)
 
@@ -74,7 +75,8 @@ def projetar_trajetoria_meta(
     bf_alvo: float = 15.0,
     nivel_experiencia: str = "intermediario",
     nivel_atividade: str = "moderado",
-    estrategia_inicial: str = "recomposicao"
+    estrategia_inicial: str = "recomposicao",
+    observacoes_contexto: str = ""
 ) -> RelatorioProjetoMetas:
     """
     Motor 100% dinâmico com proteção metabólica para BF elevado.
@@ -376,27 +378,351 @@ def projetar_trajetoria_meta(
     # =========================================================================
     # INTENÇÃO NORMAL 2: GANHAR PESO / HIPERTROFIA (peso_alvo > peso_atual)
     # =========================================================================
+    # =========================================================================
+    # INTENÇÃO NORMAL 2: GANHAR PESO / HIPERTROFIA (peso_alvo > peso_atual)
+    # Suporta 4 estratégias reais adaptadas à condição individual do atleta:
+    # 1. retorno_reabilitacao_bulk: Readaptação prévia após paragem/lesão (ex: acromioclavicular)
+    # 2. bulk_cut_atletico: Periodização clássica (sobrecarga além da meta + lapidação final)
+    # 3. recomposicao: Priming metabólico no peso atual antes do superávit
+    # 4. lean_bulk_linear: Subida direta e limpa até à meta com consolidação
+    # =========================================================================
     elif delta_peso > 0.5:
         tipo_intencao = "ganho_peso"
         eh_mulher = not eh_homem
-        # Taxa de ganho de massa magra biologicamente sustentavel (kg/semana)
-        # Mulheres ou adultos >= 45 anos tem taxa mais suave para evitar adiposidade visceral
         taxa_semanal_ganho = 0.22 if (eh_mulher or idade >= 45) else 0.35
-        superavit_kcal = 220.0 if (eh_mulher or idade >= 45) else 300.0
-        gordura_fator = 1.05 if (eh_mulher or idade >= 45) else 0.90
+        taxa_ganho = taxa_semanal_ganho
+        superavit_base = 220.0 if (eh_mulher or idade >= 45) else 320.0
+        gordura_fator = 1.05 if (eh_mulher or idade >= 45) else 0.85
 
-        diagnostico = (
-            f"Intenção Identificada: Construção Muscular Limpa ({peso_atual} kg -> {peso_alvo} kg). "
-            f"Objetivo linear de ganhar {delta_peso:.1f} kg de massa corporal de forma progressiva e sustentável. "
-            f"O algoritmo elimina oscilações e projeta uma trajetória direta de crescimento e consolidação metabólica."
-        )
+        obs_lower = observacoes_contexto.lower()
+        tem_paragem_ou_lesao = any(k in obs_lower for k in [
+            "parado", "parada", "estive parado", "meses sem treinar", "tempo sem treinar",
+            "voltar a treinar", "retorno", "lesao", "lesão", "acromio", "acromioclavicular",
+            "readaptacao", "readaptação", "recuperar", "descondicionado"
+        ])
+        tem_acromio = any(k in obs_lower for k in ["acromio", "acromioclavicular", "clavicular"])
 
-        # CENARIO 1: GANHO MODERADO / PADRAO (ate 8 kg) - 2 a 3 Fases Lineares
-        if delta_peso <= 8.0:
-            semanas_bulk = max(14, min(24, int(round(delta_peso / taxa_semanal_ganho))))
+        # ESTRATÉGIA 1: RETORNO AOS TREINOS & READAPTAÇÃO PÓS-LESÃO
+        if estrategia_inicial in ["retorno_reabilitacao", "retorno_reabilitacao_bulk"] or tem_paragem_ou_lesao:
+            detalhe_clinico = " (atenção especial à articulação acromioclavicular)" if tem_acromio else ""
+            diagnostico = (
+                f"Intenção: Readaptação Neuromuscular Pós-Lesão/Paragem e Construção Muscular ({peso_atual} kg -> {peso_alvo} kg). "
+                f"Contexto individual considerado: '{observacoes_contexto}'. "
+                f"O motor introduz uma Fase 1 de transição e fortalecimento tendinoso{detalhe_clinico} "
+                f"no peso atual para restaurar colagénio, vascularização e coordenação motora antes de aplicar superávit de bulk."
+            )
+
+            # Fase 1: Readaptação Neuromuscular
+            semanas_readapt = 5
             tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
-            calorias_f1 = round(tdee_f1 + superavit_kcal, 0)
-            bf_estimado_pos_bulk = round(min(bf_alvo + 2.0, bf_cursor + (delta_peso * 0.35)), 1)
+            calorias_f1 = round(tdee_f1 + 100.0, 0)
+            foco_readapt = (
+                "Proteção acromioclavicular e manguito: Supino em pegada neutra (45º), "
+                "face pulls, cadência excêntrica 3-0-2-0 e cargas a RPE ≤ 7.0."
+                if tem_acromio else
+                "Reativação motora e vascularização tendinosa: RPE contido em 7.0, cadência 3-0-2-0."
+            )
+
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="readaptacao_retorno",
+                nome_exibicao=f"Fase 1: Readaptação Neuromuscular & Proteção Articular ({peso_cursor} kg Estáveis)",
+                duracao_semanas=semanas_readapt,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_cursor,
+                bf_fim_estimado=bf_cursor,
+                calorias_diarias=calorias_f1,
+                macros={
+                    "proteina_g": round(peso_cursor * 2.1, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((calorias_f1 - (peso_cursor * 2.1 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=75,
+                series_trabalho_semana=12,
+                descricao_estrategia=f"Período de transição indispensável após paragem/lesão. Calorias normocalóricas (+100 kcal) para reativação anabólica sem fadiga articular.",
+                foco_treino=foco_readapt
+            ))
+            semanas_acumuladas += semanas_readapt
+            fase_num += 1
+
+            # Fase 2: Lean Bulk Progressivo
+            semanas_bulk = max(14, int(round(delta_peso / taxa_ganho)))
+            tdee_f2 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            calorias_f2 = round(tdee_f2 + superavit_base, 0)
+            bf_estimado_f2 = round(min(bf_alvo + 2.0, bf_cursor + (delta_peso * 0.30)), 1)
+
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="bulk_progressivo",
+                nome_exibicao=f"Fase 2: Lean Bulk Progressivo ({peso_cursor} kg -> {peso_alvo} kg)",
+                duracao_semanas=semanas_bulk,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_alvo,
+                bf_fim_estimado=bf_estimado_f2,
+                calorias_diarias=calorias_f2,
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((calorias_f2 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=60,
+                series_trabalho_semana=14 if (eh_mulher or idade >= 45) else 16,
+                descricao_estrategia=f"Subida limpa (+{superavit_base:.0f} kcal/dia) até {peso_alvo} kg, agora com a articulação consolidada e resposta neuromuscular reativada.",
+                foco_treino="Sobrecarga progressiva constante em exercícios biomecanicamente seguros."
+            ))
+            peso_cursor = peso_alvo
+            bf_cursor = bf_estimado_f2
+            semanas_acumuladas += semanas_bulk
+            fase_num += 1
+
+            # Fase 3: Consolidação Metabólica
+            semanas_cons = 4
+            tdee_f3 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="consolidacao",
+                nome_exibicao=f"Fase 3: Consolidação & Fixação Metabólica ({peso_cursor} kg Estáveis)",
+                duracao_semanas=semanas_cons,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_cursor,
+                bf_fim_estimado=bf_alvo,
+                calorias_diarias=round(tdee_f3, 0),
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((tdee_f3 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=70,
+                series_trabalho_semana=12,
+                descricao_estrategia=f"Fixação permanente da nova composição nos {peso_cursor} kg.",
+                foco_treino="Manutenção sólida de força e saúde articular."
+            ))
+            semanas_acumuladas += semanas_cons
+
+        # ESTRATÉGIA 2: BULK & CUT ATLÉTICO / PERIODIZAÇÃO AVANÇADA
+        elif estrategia_inicial == "bulk_cut_atletico":
+            overshoot_kg = 3.0
+            peso_pico = round(peso_alvo + overshoot_kg, 1)
+            delta_bulk = round(peso_pico - peso_cursor, 1)
+            semanas_bulk = max(16, int(round(delta_bulk / taxa_ganho)))
+
+            diagnostico = (
+                f"Intenção: Periodização Atlética Avançada ({peso_atual} kg -> {peso_alvo} kg a {bf_alvo}% BF). "
+                f"Estratégia de Alto Rendimento: Ganho de lastro anabólico ultrapassando a meta (+{overshoot_kg} kg de overshoot até {peso_pico} kg), "
+                f"seguido de pausa metabólica e fase de lapidação para atingir exatamente {peso_alvo} kg extremamente definidos."
+            )
+
+            tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            calorias_f1 = round(tdee_f1 + superavit_base + 80.0, 0)
+            bf_pico = round(bf_cursor + 3.0, 1)
+
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="bulk_sobrecarga",
+                nome_exibicao=f"Fase 1: Bulk de Sobrecarga Anabólica ({peso_cursor} kg -> {peso_pico} kg)",
+                duracao_semanas=semanas_bulk,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_pico,
+                bf_fim_estimado=bf_pico,
+                calorias_diarias=calorias_f1,
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((calorias_f1 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 35.0
+                },
+                cardio_minutos_semana=60,
+                series_trabalho_semana=16,
+                descricao_estrategia=f"Construção de lastro muscular em superávit consistente (+{superavit_base+80:.0f} kcal) ultrapassando a meta em +{overshoot_kg} kg.",
+                foco_treino="Sobrecarga progressiva pesada nos compostos e volume anabólico."
+            ))
+            peso_cursor = peso_pico
+            bf_cursor = bf_pico
+            semanas_acumuladas += semanas_bulk
+            fase_num += 1
+
+            # Fase 2: Pausa & Descompressão Metabólica
+            semanas_db = 3
+            tdee_f2 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="diet_break",
+                nome_exibicao=f"Fase 2: Pausa & Descompressão Metabólica ({peso_cursor} kg Estáveis)",
+                duracao_semanas=semanas_db,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_cursor,
+                bf_fim_estimado=round(bf_cursor - 0.5, 1),
+                calorias_diarias=round(tdee_f2, 0),
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((tdee_f2 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=75,
+                series_trabalho_semana=12,
+                descricao_estrategia="Descompressão digestiva para restaurar a sensibilidade dos recetores musculares antes do corte.",
+                foco_treino="Volume moderado com ênfase em descanso do SNC."
+            ))
+            semanas_acumuladas += semanas_db
+            fase_num += 1
+
+            # Fase 3: Cut Final de Lapidação
+            semanas_cut = max(5, int(round(overshoot_kg / 0.50)))
+            tdee_cut = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            calorias_cut = round(tdee_cut - 450.0, 0)
+
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="cut_final",
+                nome_exibicao=f"Fase 3: Cut Final de Lapidação ({peso_cursor} kg -> {peso_alvo} kg)",
+                duracao_semanas=semanas_cut,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_alvo,
+                bf_fim_estimado=bf_alvo,
+                calorias_diarias=calorias_cut,
+                macros={
+                    "proteina_g": round(peso_alvo * 2.3, 1),
+                    "gordura_g": round(peso_alvo * gordura_fator, 1),
+                    "hidratos_g": round((calorias_cut - (peso_alvo * 2.3 * 4 + peso_alvo * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 35.0
+                },
+                cardio_minutos_semana=130,
+                series_trabalho_semana=14,
+                descricao_estrategia=f"Queima da gordura superficial acumulada no bulk até atingir exatamente {peso_alvo} kg a {bf_alvo}% BF.",
+                foco_treino="Preservação de cargas e intensidade neuromuscular nos compostos."
+            ))
+            peso_cursor = peso_alvo
+            bf_cursor = bf_alvo
+            semanas_acumuladas += semanas_cut
+            fase_num += 1
+
+            # Fase 4: Consolidação Definitiva
+            tdee_f4 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="consolidacao",
+                nome_exibicao=f"Fase 4: Consolidação Definitiva ({peso_alvo} kg Estáveis)",
+                duracao_semanas=4,
+                peso_inicio_kg=peso_alvo,
+                peso_fim_estimado_kg=peso_alvo,
+                bf_fim_estimado=bf_alvo,
+                calorias_diarias=round(tdee_f4, 0),
+                macros={
+                    "proteina_g": round(peso_alvo * 2.0, 1),
+                    "gordura_g": round(peso_alvo * gordura_fator, 1),
+                    "hidratos_g": round((tdee_f4 - (peso_alvo * 2.0 * 4 + peso_alvo * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=70,
+                series_trabalho_semana=12,
+                descricao_estrategia="Fixação da nova composição corporal no peso seco conquistado.",
+                foco_treino="Treino estável de manutenção e densidade."
+            ))
+            semanas_acumuladas += 4
+
+        # ESTRATÉGIA 3: RECOMPOSIÇÃO PRIMING + BULK
+        elif estrategia_inicial in ["recomposicao", "recomposicao_priming"]:
+            diagnostico = (
+                f"Intenção: Recomposição Inicial (Priming) + Lean Bulk ({peso_atual} kg -> {peso_alvo} kg). "
+                f"Fase 1 isocalórica preparatória de 6 semanas nos {peso_atual} kg para otimizar sensibilidade insulínica e densidade "
+                f"antes de iniciar a sobrecarga energética do bulk."
+            )
+
+            semanas_recomp = 6
+            tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="recomposicao_priming",
+                nome_exibicao=f"Fase 1: Recomposição & Priming Metabólico ({peso_cursor} kg Estáveis)",
+                duracao_semanas=semanas_recomp,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_cursor,
+                bf_fim_estimado=round(max(bf_alvo, bf_cursor - 1.5), 1),
+                calorias_diarias=round(tdee_f1, 0),
+                macros={
+                    "proteina_g": round(peso_cursor * 2.2, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((tdee_f1 - (peso_cursor * 2.2 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=80,
+                series_trabalho_semana=14,
+                descricao_estrategia="Manutenção isocalórica com alta proteína para melhorar o particionamento de nutrientes antes do ganho de peso.",
+                foco_treino="Progressão de cargas e densidade metabólica."
+            ))
+            bf_cursor = round(max(bf_alvo, bf_cursor - 1.5), 1)
+            semanas_acumuladas += semanas_recomp
+            fase_num += 1
+
+            # Fase 2: Lean Bulk Progressivo
+            semanas_bulk = max(14, int(round(delta_peso / taxa_ganho)))
+            tdee_f2 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            calorias_f2 = round(tdee_f2 + superavit_base, 0)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="bulk_progressivo",
+                nome_exibicao=f"Fase 2: Lean Bulk Progressivo ({peso_cursor} kg -> {peso_alvo} kg)",
+                duracao_semanas=semanas_bulk,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_alvo,
+                bf_fim_estimado=round(bf_cursor + 1.5, 1),
+                calorias_diarias=calorias_f2,
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((calorias_f2 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=60,
+                series_trabalho_semana=14 if (eh_mulher or idade >= 45) else 16,
+                descricao_estrategia=f"Subida limpa de peso (+{superavit_base:.0f} kcal) após o priming metabólico.",
+                foco_treino="Sobrecarga constante nos compostos base."
+            ))
+            peso_cursor = peso_alvo
+            bf_cursor = round(bf_cursor + 1.5, 1)
+            semanas_acumuladas += semanas_bulk
+            fase_num += 1
+
+            # Fase 3: Consolidação
+            tdee_f3 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            fases.append(FaseProjeto(
+                numero_fase=fase_num,
+                tipo="consolidacao",
+                nome_exibicao=f"Fase 3: Consolidação Metabólica ({peso_cursor} kg Estáveis)",
+                duracao_semanas=4,
+                peso_inicio_kg=peso_cursor,
+                peso_fim_estimado_kg=peso_cursor,
+                bf_fim_estimado=bf_alvo,
+                calorias_diarias=round(tdee_f3, 0),
+                macros={
+                    "proteina_g": round(peso_cursor * 2.0, 1),
+                    "gordura_g": round(peso_cursor * gordura_fator, 1),
+                    "hidratos_g": round((tdee_f3 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
+                    "fibras_g": 30.0
+                },
+                cardio_minutos_semana=70,
+                series_trabalho_semana=12,
+                descricao_estrategia=f"Fixação permanente da nova composição nos {peso_cursor} kg.",
+                foco_treino="Treino regular de manutenção."
+            ))
+            semanas_acumuladas += 4
+
+        # ESTRATÉGIA 4: LEAN BULK LINEAR DIRETO (Padrão)
+        else:
+            diagnostico = (
+                f"Intenção: Construção Muscular Limpa Linear ({peso_atual} kg -> {peso_alvo} kg). "
+                f"Subida progressiva e contínua (+{superavit_base:.0f} kcal/dia) sem oscilações desnecessárias, "
+                f"seguida de consolidação metabólica para fixar a massa magra conquistada."
+            )
+
+            semanas_bulk = max(14, int(round(delta_peso / taxa_ganho)))
+            tdee_f1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
+            calorias_f1 = round(tdee_f1 + superavit_base, 0)
+            bf_estimado_pos_bulk = round(min(bf_alvo + 2.0, bf_cursor + (delta_peso * 0.30)), 1)
 
             fases.append(FaseProjeto(
                 numero_fase=fase_num,
@@ -415,7 +741,7 @@ def projetar_trajetoria_meta(
                 },
                 cardio_minutos_semana=60,
                 series_trabalho_semana=14 if (eh_mulher or idade >= 45) else 16,
-                descricao_estrategia=f"Subida limpa e controlada (+{superavit_kcal:.0f} kcal/dia) de {peso_cursor} kg até {peso_alvo} kg, maximizando síntese proteica sem gordura supérflua.",
+                descricao_estrategia=f"Subida limpa e controlada (+{superavit_base:.0f} kcal/dia) de {peso_cursor} kg até {peso_alvo} kg, maximizando síntese proteica sem gordura supérflua.",
                 foco_treino="Sobrecarga progressiva estável, prioridade a máquinas guiadas e halteres ergonómicos."
             ))
             peso_cursor = peso_alvo
@@ -423,7 +749,7 @@ def projetar_trajetoria_meta(
             semanas_acumuladas += semanas_bulk
             fase_num += 1
 
-            # Fase 2: Consolidacao Normocalorica (Fixar o peso)
+            # Consolidação
             semanas_cons = 4
             tdee_f2 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
             calorias_f2 = round(tdee_f2, 0)
@@ -445,146 +771,10 @@ def projetar_trajetoria_meta(
                 },
                 cardio_minutos_semana=75,
                 series_trabalho_semana=12,
-                descricao_estrategia=f"Manutenção normocalórica nos {peso_cursor} kg para estabilizar recetores hormonais, densidade muscular e fixar a nova composição corporal.",
+                descricao_estrategia=f"Manutenção normocalórica nos {peso_cursor} kg para estabilizar recetores hormonais e fixar a nova composição.",
                 foco_treino="Treino de manutenção de cargas com descanso neuromuscular."
             ))
             semanas_acumuladas += semanas_cons
-            fase_num += 1
-
-            # Fase 3 Opcional: Apenas se o BF alvo exigir secagem posterior
-            if bf_alvo < (bf_cursor - 2.0):
-                semanas_lap = 4
-                calorias_f3 = round(calorias_f2 - 350.0, 0)
-                fases.append(FaseProjeto(
-                    numero_fase=fase_num,
-                    tipo="cut_final",
-                    nome_exibicao=f"Fase 3: Lapidação Suave ({peso_cursor} kg -> {round(peso_cursor - 0.8, 1)} kg)",
-                    duracao_semanas=semanas_lap,
-                    peso_inicio_kg=peso_cursor,
-                    peso_fim_estimado_kg=round(peso_cursor - 0.8, 1),
-                    bf_fim_estimado=bf_alvo,
-                    calorias_diarias=calorias_f3,
-                    macros={
-                        "proteina_g": round(peso_cursor * 2.2, 1),
-                        "gordura_g": round(peso_cursor * gordura_fator, 1),
-                        "hidratos_g": round((calorias_f3 - (peso_cursor * 2.2 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
-                        "fibras_g": 30.0
-                    },
-                    cardio_minutos_semana=110,
-                    series_trabalho_semana=12,
-                    descricao_estrategia=f"Pequeno polimento de 4 semanas para afinar a definição para os {bf_alvo}% BF sem perder o músculo conquistado.",
-                    foco_treino="Preservação estrita das cargas obtidas no bulk."
-                ))
-                semanas_acumuladas += semanas_lap
-
-        # CENARIO 2: GANHO LONGO (> 8 kg) - Bloco 1 + Diet Break + Bloco 2 + Consolidacao
-        else:
-            ganho_b1 = round(delta_peso * 0.55, 1)
-            peso_fim_b1 = round(peso_cursor + ganho_b1, 1)
-            semanas_b1 = max(14, int(round(ganho_b1 / taxa_semanal_ganho)))
-            tdee_b1 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
-            calorias_b1 = round(tdee_b1 + superavit_kcal, 0)
-
-            fases.append(FaseProjeto(
-                numero_fase=fase_num,
-                tipo="bulk_1",
-                nome_exibicao=f"Fase 1: Lean Bulk - Bloco Inicial ({peso_cursor} kg -> {peso_fim_b1} kg)",
-                duracao_semanas=semanas_b1,
-                peso_inicio_kg=peso_cursor,
-                peso_fim_estimado_kg=peso_fim_b1,
-                bf_fim_estimado=round(bf_cursor + 2.0, 1),
-                calorias_diarias=calorias_b1,
-                macros={
-                    "proteina_g": round(peso_cursor * 2.0, 1),
-                    "gordura_g": round(peso_cursor * gordura_fator, 1),
-                    "hidratos_g": round((calorias_b1 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
-                    "fibras_g": 35.0
-                },
-                cardio_minutos_semana=60,
-                series_trabalho_semana=14,
-                descricao_estrategia=f"Primeiro bloco de crescimento até aos {peso_fim_b1} kg.",
-                foco_treino="Sobrecarga progressiva constante."
-            ))
-            peso_cursor = peso_fim_b1
-            semanas_acumuladas += semanas_b1
-            fase_num += 1
-
-            # Pausa metabolica de 3 semanas
-            semanas_db = 3
-            tdee_db = calcular_tdee_dinamico(peso_cursor, bf_cursor + 2.0, nivel_atividade)
-            fases.append(FaseProjeto(
-                numero_fase=fase_num,
-                tipo="diet_break",
-                nome_exibicao=f"Fase 2: Pausa & Consolidação Metabólica ({peso_cursor} kg Estáveis)",
-                duracao_semanas=semanas_db,
-                peso_inicio_kg=peso_cursor,
-                peso_fim_estimado_kg=peso_cursor,
-                bf_fim_estimado=round(bf_cursor + 1.5, 1),
-                calorias_diarias=round(tdee_db, 0),
-                macros={
-                    "proteina_g": round(peso_cursor * 2.0, 1),
-                    "gordura_g": round(peso_cursor * gordura_fator, 1),
-                    "hidratos_g": round((tdee_db - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
-                    "fibras_g": 30.0
-                },
-                cardio_minutos_semana=80,
-                series_trabalho_semana=12,
-                descricao_estrategia="Descompressão digestiva de 3 semanas para restabelecer a sensibilidade insulínica.",
-                foco_treino="Volume moderado com foco em recuperação."
-            ))
-            semanas_acumuladas += semanas_db
-            fase_num += 1
-
-            # Bloco 2 ate a meta final
-            semanas_b2 = max(12, int(round((peso_alvo - peso_cursor) / taxa_semanal_ganho)))
-            tdee_b2 = calcular_tdee_dinamico(peso_cursor, bf_cursor, nivel_atividade)
-            calorias_b2 = round(tdee_b2 + superavit_kcal, 0)
-            fases.append(FaseProjeto(
-                numero_fase=fase_num,
-                tipo="bulk_2",
-                nome_exibicao=f"Fase 3: Lean Bulk - Construção Final ({peso_cursor} kg -> {peso_alvo} kg)",
-                duracao_semanas=semanas_b2,
-                peso_inicio_kg=peso_cursor,
-                peso_fim_estimado_kg=peso_alvo,
-                bf_fim_estimado=bf_alvo,
-                calorias_diarias=calorias_b2,
-                macros={
-                    "proteina_g": round(peso_cursor * 2.0, 1),
-                    "gordura_g": round(peso_cursor * gordura_fator, 1),
-                    "hidratos_g": round((calorias_b2 - (peso_cursor * 2.0 * 4 + peso_cursor * gordura_fator * 9)) / 4, 1),
-                    "fibras_g": 35.0
-                },
-                cardio_minutos_semana=60,
-                series_trabalho_semana=16,
-                descricao_estrategia=f"Atingir exatamente a meta de {peso_alvo} kg.",
-                foco_treino="Intensidade alta nos compostos."
-            ))
-            peso_cursor = peso_alvo
-            semanas_acumuladas += semanas_b2
-            fase_num += 1
-
-            # Consolidacao Final
-            fases.append(FaseProjeto(
-                numero_fase=fase_num,
-                tipo="consolidacao",
-                nome_exibicao=f"Fase 4: Consolidação Definitiva ({peso_alvo} kg)",
-                duracao_semanas=4,
-                peso_inicio_kg=peso_alvo,
-                peso_fim_estimado_kg=peso_alvo,
-                bf_fim_estimado=bf_alvo,
-                calorias_diarias=round(calcular_tdee_dinamico(peso_alvo, bf_alvo, nivel_atividade), 0),
-                macros={
-                    "proteina_g": round(peso_alvo * 2.0, 1),
-                    "gordura_g": round(peso_alvo * gordura_fator, 1),
-                    "hidratos_g": round((calcular_tdee_dinamico(peso_alvo, bf_alvo, nivel_atividade) - (peso_alvo * 2.0 * 4 + peso_alvo * gordura_fator * 9)) / 4, 1),
-                    "fibras_g": 30.0
-                },
-                cardio_minutos_semana=70,
-                series_trabalho_semana=12,
-                descricao_estrategia="Fixação permanente da nova massa corporal.",
-                foco_treino="Treino regular equilibrado."
-            ))
-            semanas_acumuladas += 4
 
     # =========================================================================
     # INTENÇÃO NORMAL 3: RECOMPOSIÇÃO NO MESMO PESO (peso_alvo == peso_atual)
@@ -638,8 +828,10 @@ def projetar_trajetoria_meta(
         meses_estimados=meses_totais,
         nivel_experiencia=nivel_experiencia,
         estrategia_inicial=estrategia_inicial,
+        observacoes_contexto=observacoes_contexto,
         tipo_intencao=tipo_intencao,
         diagnostico_fisiologico=diagnostico,
         bloqueio_bulk_por_bf=bloqueio_bulk,
         fases=fases
     )
+

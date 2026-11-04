@@ -37,6 +37,7 @@ class EsquemaProjecaoRequisicao(BaseModel):
     nivel_experiencia: str = "intermediario"
     nivel_atividade: str = "moderado"
     estrategia_inicial: str = "recomposicao"
+    observacoes_contexto: Optional[str] = ""
 
 
 class EsquemaSubstituicaoRequisicao(BaseModel):
@@ -153,6 +154,7 @@ class EsquemaCriarProjeto(BaseModel):
     bf_inicial: Optional[float] = 15.0
     bf_alvo: Optional[float] = 10.0
     estrategia_inicial: Optional[str] = "recomposicao"
+    observacoes_contexto: Optional[str] = ""
     duracao_total_semanas: Optional[int] = 12
     fases: List[Dict[str, Any]] = []
     relatorio_completo_json: Optional[str] = None

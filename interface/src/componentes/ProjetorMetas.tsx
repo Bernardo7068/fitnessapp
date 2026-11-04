@@ -67,6 +67,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
   const [nivelExperiencia, setNivelExperiencia] = useState<string>('intermediario');
   const [nivelAtividade, setNivelAtividade] = useState<string>('moderado');
   const [estrategiaInicial, setEstrategiaInicial] = useState<string>('recomposicao');
+  const [observacoesContexto, setObservacoesContexto] = useState<string>('');
 
   const [relatorioCalculado, setRelatorioCalculado] = useState<RelatorioProjetoMetas | null>(null);
   const [composicaoAtual, setComposicaoAtual] = useState<ComposicaoCorporal | null>(null);
@@ -182,7 +183,8 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
         bf_alvo: bAlvo,
         nivel_experiencia: nivelExperiencia,
         nivel_atividade: nivelAtividade,
-        estrategia_inicial: estrategiaInicial
+        estrategia_inicial: estrategiaInicial,
+        observacoes_contexto: observacoesContexto
       });
       setRelatorioCalculado(resProj);
 
@@ -197,6 +199,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
         bf_inicial: bAtual,
         bf_alvo: bAlvo,
         estrategia_inicial: estrategiaInicial,
+        observacoes_contexto: observacoesContexto,
         duracao_total_semanas: resProj.semanas_totais_estimadas,
         fases: resProj.fases || [],
         relatorio_completo_json: JSON.stringify(resProj),
@@ -560,6 +563,16 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
                     {projetoEmFoco.descricao}
                   </p>
+                )}
+
+                {relatorioExibicao?.diagnostico_fisiologico && (
+                  <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-xs text-emerald-200 flex items-start gap-2.5 max-w-3xl">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-white block mb-0.5">Diagnóstico Fisiológico & Clínico:</span>
+                      <p className="leading-relaxed text-slate-300">{relatorioExibicao.diagnostico_fisiologico}</p>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1506,26 +1519,135 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-800">
+            {/* Estratégia Fisiológica & Periodização */}
+            <div className="space-y-3 pt-2 border-t border-slate-800">
               <label className="block text-xs font-semibold text-slate-300">
-                Estratégia Recomendada:
+                Estratégia Fisiológica & Periodização:
               </label>
+
               {pesoAlvo < pesoAtual ? (
-                <label className="block p-3 rounded-xl border bg-emerald-950/40 border-emerald-500/60 shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <input type="radio" checked readOnly className="accent-emerald-500" />
-                    <span className="text-xs font-bold text-white">
-                      🟢 Cut Estruturado com Diet Breaks ({pesoAtual}kg → {pesoAlvo}kg)
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1 pl-5">
-                    Défice progressivo seguro (-500 kcal/dia) com pausas de manutenção para impedir desaceleração metabólica.
-                  </p>
-                </label>
+                <div className="space-y-2">
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estrategia"
+                        value="cut_com_diet_breaks"
+                        checked={estrategiaInicial === 'cut_com_diet_breaks' || estrategiaInicial === 'cut' || estrategiaInicial === 'recomposicao'}
+                        onChange={() => setEstrategiaInicial('cut_com_diet_breaks')}
+                        className="accent-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-white">
+                        🟢 Cut Estruturado com Diet Breaks ({pesoAtual}kg → {pesoAlvo}kg)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      Défice progressivo seguro (-500 kcal/dia) com pausas de manutenção metabólica para preservar massa muscular e evitar estagnação.
+                    </p>
+                  </label>
+
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'cut_direto'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estrategia"
+                        value="cut_direto"
+                        checked={estrategiaInicial === 'cut_direto'}
+                        onChange={() => setEstrategiaInicial('cut_direto')}
+                        className="accent-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-white">
+                        ⚡ Cut Linear Direto (Sem pausas de manutenção)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      Défice contínuo linear para reduções de peso mais céleres.
+                    </p>
+                  </label>
+                </div>
               ) : (
                 <div className="space-y-2">
-                  <label className={`block p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'recomposicao' ? 'bg-emerald-950/40 border-emerald-500/60' : 'bg-slate-950 border-slate-800'
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estrategia"
+                        value="lean_bulk_linear"
+                        checked={estrategiaInicial === 'lean_bulk_linear' || estrategiaInicial === 'bulk_direto'}
+                        onChange={() => setEstrategiaInicial('lean_bulk_linear')}
+                        className="accent-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-white">
+                        🟢 Lean Bulk Linear (Progressivo & Direto)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      Superávit calórico controlado (+250 kcal) subindo limpo direto até aos {pesoAlvo}kg com fase de consolidação metabólica.
+                    </p>
+                  </label>
+
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'bulk_cut_atletico'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estrategia"
+                        value="bulk_cut_atletico"
+                        checked={estrategiaInicial === 'bulk_cut_atletico'}
+                        onChange={() => setEstrategiaInicial('bulk_cut_atletico')}
+                        className="accent-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-white">
+                        🏆 Bulk & Cut Atlético (Sobrecarga de Lastro + Mini-Cut Final)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      Periodização de atleta: sobrecarga de lastro até {Number(pesoAlvo) + 3}kg (+3kg), descompressão metabólica e cut final de lapidação para atingir os {pesoAlvo}kg com {bfAlvo}% BF seco.
+                    </p>
+                  </label>
+
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'retorno_reabilitacao_bulk'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estrategia"
+                        value="retorno_reabilitacao_bulk"
+                        checked={estrategiaInicial === 'retorno_reabilitacao_bulk'}
+                        onChange={() => setEstrategiaInicial('retorno_reabilitacao_bulk')}
+                        className="accent-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-white">
+                        🛡️ Retorno / Reabilitação + Bulk (Pós-Lesão ou Paragem Prolongada)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      Inicia com 4 a 6 semanas de readaptação neuromuscular no peso atual ({pesoAtual}kg, RPE ≤ 7.0, proteção de tendões e manguito) antes do superávit calórico progressivo.
+                    </p>
+                  </label>
+
+                  <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${
+                    estrategiaInicial === 'recomposicao'
+                      ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                   }`}>
                     <div className="flex items-center gap-2">
                       <input
@@ -1537,29 +1659,80 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                         className="accent-emerald-500"
                       />
                       <span className="text-xs font-bold text-white">
-                        🟢 Recomposição nos {pesoAtual}kg (Sem descer de peso)
+                        🔄 Recomposição Inicial (Priming Metabólico) + Bulk
                       </span>
                     </div>
-                  </label>
-                  <label className={`block p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    estrategiaInicial === 'bulk_direto' ? 'bg-emerald-950/40 border-emerald-500/60' : 'bg-slate-950 border-slate-800'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="estrategia"
-                        value="bulk_direto"
-                        checked={estrategiaInicial === 'bulk_direto'}
-                        onChange={() => setEstrategiaInicial('bulk_direto')}
-                        className="accent-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-white">
-                        🔵 Lean Bulk Direto (Superávit contínuo +250 kcal/dia)
-                      </span>
-                    </div>
+                    <p className="text-xs text-slate-400 mt-1 pl-5">
+                      6 a 8 semanas no peso atual para aumentar sensibilidade à insulina e densidade muscular antes da subida calórica.
+                    </p>
                   </label>
                 </div>
               )}
+            </div>
+
+            {/* Observações de Contexto, Lesões e Histórico Clínico */}
+            <div className="space-y-2 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Contexto Atual, Lesões ou Condições Específicas (Opcional):
+                </label>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  Adaptação Biomecânica
+                </span>
+              </div>
+              <textarea
+                value={observacoesContexto}
+                onChange={(e) => setObservacoesContexto(e.target.value)}
+                placeholder="Ex: Tenho 70kg quero chegar aos 80kg mas estou há 3 meses parado por lesão no acromioclavicular. Preciso de tempo para recuperar estímulo e andamento..."
+                rows={3}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-none"
+              />
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-400">Atalhos rápidos:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const texto = 'Estou há 3 meses parado por lesão no acromioclavicular, preciso de tempo para recuperar estímulo e andamento com proteção articular.';
+                    setObservacoesContexto((prev) => prev ? `${prev} | ${texto}` : texto);
+                    setEstrategiaInicial('retorno_reabilitacao_bulk');
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-[10px] text-emerald-300 hover:bg-emerald-900/60 transition-all"
+                >
+                  + Lesão Acromioclavicular / Ombro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const texto = 'Parado há vários meses, preciso de fase de readaptação motora e condicionamento antes de progredir cargas.';
+                    setObservacoesContexto((prev) => prev ? `${prev} | ${texto}` : texto);
+                    setEstrategiaInicial('retorno_reabilitacao_bulk');
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] text-slate-300 hover:bg-slate-700 transition-all"
+                >
+                  + Parado há meses (readaptação)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const texto = 'Sensibilidade ou histórico de dor lombar, evitar sobrecarga axial excessiva.';
+                    setObservacoesContexto((prev) => prev ? `${prev} | ${texto}` : texto);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] text-slate-300 hover:bg-slate-700 transition-all"
+                >
+                  + Desconforto Lombar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const texto = '100% apto e sem qualquer limitação articular ou dor.';
+                    setObservacoesContexto(texto);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] text-slate-300 hover:bg-slate-700 transition-all"
+                >
+                  + 100% Apto
+                </button>
+              </div>
             </div>
 
             <button

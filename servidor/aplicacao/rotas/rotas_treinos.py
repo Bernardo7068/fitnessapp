@@ -459,6 +459,16 @@ async def recomendar_treino_com_ia(
                     dados["cardio_minutos_semana"] = proj.get("cardio_minutos_semana")
                 if not dados.get("series_alvo_semana"):
                     dados["series_alvo_semana"] = proj.get("series_trabalho_alvo")
+                obs_proj = proj.get("observacoes_contexto") or ""
+                if obs_proj:
+                    if not dados.get("lesoes_atuais_ou_passadas"):
+                        dados["lesoes_atuais_ou_passadas"] = obs_proj
+                    elif obs_proj not in dados["lesoes_atuais_ou_passadas"]:
+                        dados["lesoes_atuais_ou_passadas"] = f"{dados['lesoes_atuais_ou_passadas']} | Contexto do Projeto: {obs_proj}"
+                    if not dados.get("problemas_limitacoes"):
+                        dados["problemas_limitacoes"] = obs_proj
+                    elif obs_proj not in dados["problemas_limitacoes"]:
+                        dados["problemas_limitacoes"] = f"{dados['problemas_limitacoes']} | Contexto do Projeto: {obs_proj}"
             except Exception:
                 pass
         if not dados.get("fase_projeto"):

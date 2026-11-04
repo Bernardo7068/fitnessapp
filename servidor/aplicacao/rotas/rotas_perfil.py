@@ -373,7 +373,8 @@ def calcular_projecao(requisicao: EsquemaProjecaoRequisicao):
         bf_alvo=requisicao.bf_alvo,
         nivel_experiencia=requisicao.nivel_experiencia,
         nivel_atividade=requisicao.nivel_atividade,
-        estrategia_inicial=requisicao.estrategia_inicial
+        estrategia_inicial=requisicao.estrategia_inicial,
+        observacoes_contexto=requisicao.observacoes_contexto or ""
     )
     return relatorio
 
@@ -528,10 +529,14 @@ def criar_projeto(
         fase1_nome = dados.fases[0].get("nome_exibicao", "Fase 1")
         fase1_kcal = float(dados.fases[0].get("calorias_diarias", 2000.0))
 
+    desc_final = dados.descricao or ""
+    if dados.observacoes_contexto and dados.observacoes_contexto not in desc_final:
+        desc_final = f"{desc_final} | Contexto Clínico/Atleta: {dados.observacoes_contexto}".strip(" |")
+
     novo_projeto = ProjetoFisiologico(
         utilizador_id=uid,
         nome=dados.nome,
-        descricao=dados.descricao or "",
+        descricao=desc_final,
         tipo_intencao=dados.tipo_intencao or "Transformação Corporal",
         ativo=dados.ativar_imediatamente,
         status="ativo",
@@ -578,7 +583,8 @@ def criar_projeto(
             "relatorio": relatorio_obj,
             "tipo_intencao": novo_projeto.tipo_intencao,
             "peso_atual_kg": dados.peso_inicial_kg,
-            "peso_alvo_kg": dados.peso_alvo_kg
+            "peso_alvo_kg": dados.peso_alvo_kg,
+            "observacoes_contexto": dados.observacoes_contexto or ""
         }
         perfil.projeto_ativo_json = json.dumps(info_projeto)
         sessao.commit()
