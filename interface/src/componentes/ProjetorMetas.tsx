@@ -119,7 +119,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
         setAbaPrincipal('novo');
       }
 
-      atualizarSugestaoNome(pesoAtual, pesoAlvo);
+      // nome livre definido pelo atleta
     } catch (err) {
       console.error('Erro ao carregar metas:', err);
     } finally {
@@ -136,17 +136,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
     }
   };
 
-  const atualizarSugestaoNome = (pAtual: number | '', pAlvo: number | '') => {
-    const pa = typeof pAtual === 'number' && !isNaN(pAtual) ? pAtual : 70;
-    const pal = typeof pAlvo === 'number' && !isNaN(pAlvo) ? pAlvo : 75;
-    if (pAlvo < pAtual) {
-      setNomeProjetoInput(`Cutting / Secagem (${pAtual}kg ➔ ${pAlvo}kg)`);
-    } else if (pAlvo > pAtual) {
-      setNomeProjetoInput(`Bulking Limpo (${pAtual}kg ➔ ${pAlvo}kg)`);
-    } else {
-      setNomeProjetoInput(`Recomposição Corporal (${pAtual}kg)`);
-    }
-  };
+  const atualizarSugestaoNome = () => {}; // Desativado para nao influenciar nem sobrepor o nome escolhido pelo atleta
 
   const handleCalcularENovoProjeto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,7 +489,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
             <button
               onClick={() => {
                 setAbaPrincipal('novo');
-                atualizarSugestaoNome(pesoAtual, pesoAlvo);
+                // nome livre definido pelo atleta
               }}
               className={`px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
                 abaPrincipal === 'novo'
@@ -1189,7 +1179,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
             <button
               onClick={() => {
                 setAbaPrincipal('novo');
-                atualizarSugestaoNome(pesoAtual, pesoAlvo);
+                // nome livre definido pelo atleta
               }}
               className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow transition"
             >
@@ -1360,7 +1350,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   required
                   value={nomeProjetoInput}
                   onChange={(e) => setNomeProjetoInput(e.target.value)}
-                  placeholder="Ex: Cutting Agressivo 70kg -> 60kg"
+                  placeholder="Ex: Projeto For?a & Defini??o, Prepara??o 80kg, etc."
                   className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg px-3 py-2 text-white font-bold text-sm"
                 />
               </div>
@@ -1404,7 +1394,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                     } else {
                       const n = parseFloat(v);
                       setPesoAtual(isNaN(n) ? '' : n);
-                      if (!isNaN(n)) atualizarSugestaoNome(n, typeof pesoAlvo === 'number' ? pesoAlvo : 80);
+                      
                     }
                   }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-bold focus:border-emerald-500 focus:outline-none"
@@ -1439,7 +1429,7 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                     } else {
                       const n = parseFloat(v);
                       setPesoAlvo(isNaN(n) ? '' : n);
-                      if (!isNaN(n)) atualizarSugestaoNome(typeof pesoAtual === 'number' ? pesoAtual : 70, n);
+                      
                     }
                   }}
                   className="w-full bg-slate-950 border border-emerald-500/40 rounded-lg px-3 py-2 text-emerald-300 font-extrabold focus:outline-none"
