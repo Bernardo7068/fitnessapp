@@ -398,6 +398,7 @@ def listar_projetos(
         ProjetoFisiologico.criado_em.desc()
     ).all()
 
+    resultado = []
     for p in projetos:
         fases = []
         try:
