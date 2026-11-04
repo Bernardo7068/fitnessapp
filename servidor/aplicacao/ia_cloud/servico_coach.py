@@ -548,48 +548,70 @@ class ServicoCoachIA:
         eh_hibrido = ("powerbuilding" in objetivo or "powerbuilding" in objetivos_det) and not tem_onco_mama
         eh_powerlifting = ("powerlifting" in objetivo or "powerlifting" in objetivos_det) and not tem_onco_mama
 
+        # ESCALONAMENTO BIOMECÂNICO DE REPETIÇÕES (Zero repetições de força consecutivas)
+        # Tier 1 = Apenas o 1º Composto Base Pesado
+        # Tier 2 = 2º Composto Secundário / Apoio
+        # Tier 3 = Isoladores / Máquinas / Cabos
+        # Tier 4 = Braços / Deltoides Laterais / Detalhes
         if tem_onco_mama:
-            reps_comp = "10-12"
-            reps_isol = "12-15"
+            reps_tier1 = "10-12"
+            reps_tier2 = "10-12"
+            reps_tier3 = "12-15"
+            reps_tier4 = "12-15"
             rpe_alvo = 7.0
             descanso_comp = 90
             foco_desc = "Reabilitação Fisiológica & Hipertrofia Segura Pós-Oncológica (RPE ≤ 7.0 e Proteção Tecidual)"
         elif eh_powerlifting:
-            reps_comp = "3-5"
-            reps_isol = "6-8"
+            reps_tier1 = "3-5"
+            reps_tier2 = "6-8"
+            reps_tier3 = "8-10"
+            reps_tier4 = "10-12"
             rpe_alvo = 8.5
             descanso_comp = 180
-            foco_desc = "Powerlifting Puro (Cargas Máximas a 3-5 reps e Força Neural)"
+            foco_desc = "Powerlifting Puro (Cargas Máximas no Composto Principal)"
         elif eh_hibrido:
-            reps_comp = "5-8"
-            reps_isol = "8-12"
+            reps_tier1 = "5-8"
+            reps_tier2 = "8-10"
+            reps_tier3 = "10-12"
+            reps_tier4 = "12-15"
             rpe_alvo = 8.5
             descanso_comp = 120
-            foco_desc = "Powerbuilding Híbrido: Hipertrofia Miofibrilar com Sobrecarga nos 3 Grandes"
+            foco_desc = "Powerbuilding Híbrido: Força no 1º Composto e Hipertrofia Progressiva"
         elif "forca" in objetivo:
-            reps_comp = "4-6"
-            reps_isol = "6-8"
+            reps_tier1 = "4-6"
+            reps_tier2 = "8-10"
+            reps_tier3 = "10-12"
+            reps_tier4 = "12-15"
             rpe_alvo = 8.5
             descanso_comp = 150
-            foco_desc = "Foco em Força Neural e Tensão Mecânica Pura"
+            foco_desc = "Foco em Força no 1º Composto e Volume Hipertrófico nos Acessórios"
         elif "resistencia" in objetivo:
-            reps_comp = "12-15"
-            reps_isol = "15-20"
+            reps_tier1 = "12-15"
+            reps_tier2 = "15-18"
+            reps_tier3 = "15-20"
+            reps_tier4 = "15-20"
             rpe_alvo = 8.0
             descanso_comp = 60
             foco_desc = "Foco em Resistência Muscular e Densidade Metabólica"
         elif "femin" in sexo and (idade >= 45 or "iniciante" in nivel_exp):
-            reps_comp = "8-10"
-            reps_isol = "10-12"
+            reps_tier1 = "8-10"
+            reps_tier2 = "10-12"
+            reps_tier3 = "10-12"
+            reps_tier4 = "12-15"
             rpe_alvo = 7.5
             descanso_comp = 90
             foco_desc = "Hipertrofia Sustentável, Saúde Articular e Densidade Óssea (RPE 7.5)"
         else:
-            reps_comp = "6-8"
-            reps_isol = "8-12"
+            reps_tier1 = "6-8"       # 1º Composto Base Pesado (apenas este!)
+            reps_tier2 = "8-10"      # 2º Composto Secundário / Apoio
+            reps_tier3 = "10-12"     # 3º Exercício (Isoladores / Cabos)
+            reps_tier4 = "12-15"     # 4º e 5º Exercícios (Deltoides / Braços / Gémeos)
             rpe_alvo = 8.0
             descanso_comp = 105
-            foco_desc = "Hipertrofia Muscular & Tensão Mecânica Segura (6-8 reps compostos / 8-12 isoladores)"
+            foco_desc = "Hipertrofia Escalonada: 6-8 reps apenas no 1º composto, 8-10 no secundário e 10-15 nos acessórios"
+
+        reps_comp = reps_tier1
+        reps_isol = reps_tier3
 
         # Cadência de Treino
         if "2_1" in cadencia or "2_treino" in cadencia or "2 on" in cadencia:
@@ -627,44 +649,38 @@ class ServicoCoachIA:
         else:
             analise_plano_anterior = "Plano desenhado à medida das tuas condicionantes físicas e disponibilidade semanal."
 
-        # Diagnóstico e Ajustes de Lesões
+        # Diagnóstico e Ajustes de Lesões (UNIVERSAL - SEM RESTRIÇÃO DE PALAVRAS-CHAVE)
         ajustes_lesao = []
+        texto_lesoes_bruto = str(dados_treino.get("lesoes_atuais_ou_passadas") or dados_treino.get("problemas_limitacoes") or "").strip()
+        termos_sem_lesao = ["nenhum", "nenhuma", "nao", "não", "100%", "sem lesao", "sem lesão", "apto", "tudo bem", "nada"]
+        tem_lesao_declarada = bool(texto_lesoes_bruto and not any(texto_lesoes_bruto.lower().strip() == p for p in termos_sem_lesao))
+
         if tem_onco_mama:
             ex_supino = "supino_halteres_pegada_neutra"
             ex_desenvolvimento = "face_pull"
-            ajustes_lesao.append(
-                "• Condição Oncológica & Pós-Cirúrgica (Mastectomia / Esvaziamento Ganglionar): Supino livre com barra estritamente contraindicado "
-                "para evitar edema axilar, tração sobre tecidos cicatriciais e compressão vascular. Substituído por Supino com Halteres em Pegada Neutra (45º) "
-                "com amplitude protegida e RPE estritamente contido a ≤ 7.0. Monitorizar qualquer sensação de peso ou edema no membro superior operado."
-            )
-        elif tem_lesao_ombro:
-            ex_supino = "supino_halteres_pegada_neutra"
-            ex_desenvolvimento = "face_pull"
-            ajustes_lesao.append(
-                "• Lesão de Ombro/Cotovelo: Substituição do supino reto com barra por Supino com Halteres em Pegada Neutra (45º) "
-                "para diminuir a compressão no espaço subacromial. Eliminado desenvolvimento pesado acima da cabeça."
-            )
-        else:
-            ex_supino = "supino_reto_barra"
-            ex_desenvolvimento = "desenvolvimento_halteres"
-
-        if tem_lesao_lombar:
             ex_remada = "remada_apoiada_banco"
             ex_agachamento = "leg_press_45"
             ex_posterior = "hip_thrust_elevacao_pelvica"
             ajustes_lesao.append(
-                "• Proteção Lombar/Coluna: Substituição da remada curvada e agachamento livre por Remada Apoiada no Banco e Leg Press 45º, "
-                "eliminando forças de cisalhamento na coluna vertebral L4-L5/S1."
+                "• Condição Oncológica & Pós-Cirúrgica (Mastectomia / Esvaziamento Ganglionar): Supino livre com barra estritamente contraindicado "
+                "para evitar edema axilar, tração sobre tecidos cicatriciais e compressão vascular. Substituído por Supino com Halteres em Pegada Neutra (45º) "
+                "com amplitude protegida e RPE estritamente contido a ≤ 7.0."
             )
-        elif tem_lesao_joelho:
-            ex_remada = "remada_curvada_barra"
+        elif tem_lesao_declarada:
+            # Universal: Qualquer problema reportado pelo atleta ativa proteção articular e é citado explicitamente
+            ex_supino = "supino_halteres_pegada_neutra"
+            ex_desenvolvimento = "face_pull"
+            ex_remada = "remada_apoiada_banco"
             ex_agachamento = "leg_press_45"
-            ex_posterior = "peso_morto_romeno"
+            ex_posterior = "hip_thrust_elevacao_pelvica"
             ajustes_lesao.append(
-                "• Proteção de Joelho/Patela: Troca do agachamento livre tradicional por Leg Press 45º cadenciado e pés médios, "
-                "reduzindo a sobrecarga patelofemoral e estabilizando a articulação."
+                f"• Condição / Lesão Reportada pelo Atleta ({texto_lesoes_bruto}):\n"
+                f"  Prescrição adaptada com proteção biomecânica ativa. Movimentos de compressão e cisalhamento articular extremo com barra livre "
+                f"foram substituídos por halteres em pegada neutra a 45º, remada apoiada no banco e máquinas articuladas com trajetória anatómica guiada."
             )
         else:
+            ex_supino = "supino_reto_barra"
+            ex_desenvolvimento = "desenvolvimento_halteres"
             ex_remada = "remada_curvada_barra"
             ex_agachamento = "agachamento_livre"
             ex_posterior = "peso_morto_romeno"
@@ -717,11 +733,11 @@ class ServicoCoachIA:
                     "foco": f"{foco_desc} (Peito, Costas, Ombros e Braços)",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Escápulas retraídas e deprimidas para estabilização acromial."),
-                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Tração controlada junto ao tronco."),
-                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
-                        criar_ex("puxada_frente_polia", s_isolador, reps_isol, rpe_alvo, 75, "Expansão dorsal controlada."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Isolamento estrito sem impulsos.")
+                        criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Escápulas retraídas e deprimidas para estabilização acromial."),
+                        criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Tração controlada junto ao tronco."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_tier3, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
+                        criar_ex("puxada_frente_polia", s_isolador, reps_tier3, rpe_alvo, 75, "Expansão dorsal controlada."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Isolamento estrito sem impulsos.")
                     ][:max_ex]
                 },
                 {
@@ -730,10 +746,10 @@ class ServicoCoachIA:
                     "foco": f"{foco_desc} (Quadríceps, Isquiotibiais e Gémeos)",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Descida controlada em 3 segundos."),
-                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Alongamento profundo da cadeia posterior."),
-                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Contração no pico de flexão do joelho."),
+                        criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Descida controlada em 3 segundos."),
+                        criar_ex(ex_posterior, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Alongamento profundo da cadeia posterior."),
+                        criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Contração no pico de flexão do joelho."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Pausa isométrica de 1 segundo na ponta dos pés.")
                     ][:max_ex]
                 }
@@ -749,11 +765,11 @@ class ServicoCoachIA:
                         "foco": "Cintura Escapular & Peitoral",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tensão peitoral contínua sem hiperextensão articular."),
-                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_secundario, reps_comp, rpe_alvo, 90, "Banco regulado a 30 graus."),
-                            criar_ex(ex_desenvolvimento if not tem_onco_mama else "face_pull", s_secundario, reps_isol, rpe_alvo, 75, "Trabalho escapular seguro."),
-                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Elevação no plano escapular."),
-                            criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Abertura lateral na base do movimento.")
+                            criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Tensão peitoral contínua sem hiperextensão articular."),
+                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_secundario, reps_tier2, rpe_alvo, 90, "Banco regulado a 30 graus."),
+                            criar_ex(ex_desenvolvimento if not tem_onco_mama else "face_pull", s_secundario, reps_tier3, rpe_alvo, 75, "Trabalho escapular seguro."),
+                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier4, rpe_alvo, 60, "Elevação no plano escapular."),
+                            criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Abertura lateral na base do movimento.")
                         ][:max_ex]
                     },
                     {
@@ -762,10 +778,10 @@ class ServicoCoachIA:
                         "foco": "Densidade e Espessura Dorsal",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tração vertical sem balanço do tronco."),
-                            criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Cotovelos encostados às costelas."),
-                            criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Rotação externa fundamental para a cápsula do ombro."),
-                            criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Tensão constante no músculo braquial."),
+                            criar_ex("puxada_frente_polia", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Tração vertical sem balanço do tronco."),
+                            criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, 90, "Cotovelos encostados às costelas."),
+                            criar_ex("face_pull", s_isolador, reps_tier3, rpe_alvo, 60, "Rotação externa fundamental para a cápsula do ombro."),
+                            criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Tensão constante no músculo braquial."),
                             criar_ex("curl_biceps_barra_w", s_braco, reps_isol, rpe_alvo, 60, "Pegada curvada protege as articulações do punho.")
                         ][:max_ex]
                     },
@@ -775,9 +791,9 @@ class ServicoCoachIA:
                         "foco": "Membros Inferiores Completos",
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
-                            criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
-                            criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Empurrar os quadris para trás sem fletir a lombar."),
-                            criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Cadência excêntrica de 3 segundos."),
+                            criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
+                            criar_ex(ex_posterior, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Empurrar os quadris para trás sem fletir a lombar."),
+                            criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Cadência excêntrica de 3 segundos."),
                             criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isolamento mecânico estrito dos flexores."),
                             criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Alongamento completo no ponto de inversão.")
                         ][:max_ex]
@@ -793,12 +809,12 @@ class ServicoCoachIA:
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
                             # Bloco 1: Pernas contíguas
-                            criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Controlo rigoroso da descida (3 segundos)."),
-                            criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Dorsiflexão dos pés para ativar a cabeça curta do bíceps femoral."),
+                            criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Controlo rigoroso da descida (3 segundos)."),
+                            criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Dorsiflexão dos pés para ativar a cabeça curta do bíceps femoral."),
                             # Bloco 2: Tronco contíguo
-                            criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Escápulas retraídas e cotovelos alinhados a 45º."),
-                            criar_ex("puxada_frente_polia", s_secundario, reps_comp, rpe_alvo, 90, "Puxada até ao queixo, evitando balanço lombar."),
-                            criar_ex(ex_desenvolvimento, s_secundario, reps_isol, rpe_alvo, 75, "Movimento seguro e controlado no plano escapular.")
+                            criar_ex(ex_supino, s_composto_base, reps_tier2, rpe_alvo, descanso_comp, "Escápulas retraídas e cotovelos alinhados a 45º."),
+                            criar_ex("puxada_frente_polia", s_secundario, reps_tier3, rpe_alvo, 90, "Puxada até ao queixo, evitando balanço lombar."),
+                            criar_ex(ex_desenvolvimento, s_secundario, reps_tier3, rpe_alvo, 75, "Movimento seguro e controlado no plano escapular.")
                         ][:max_ex]
                     },
                     {
@@ -808,12 +824,12 @@ class ServicoCoachIA:
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
                             # Bloco 1: Pernas contíguas
-                            criar_ex(ex_posterior, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alongamento dos isquiotibiais empurrando o quadril para trás."),
-                            criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
+                            criar_ex(ex_posterior, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Alongamento dos isquiotibiais empurrando o quadril para trás."),
+                            criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Pés na largura dos ombros sem descolar a bacia."),
                             # Bloco 2: Tronco contíguo
-                            criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Tração com cotovelos encostados às costelas."),
-                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_isolador, reps_isol, rpe_alvo, 75, "Foco peitoral com amplitude protegida."),
-                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Tensão contínua em todo o arco de movimento.")
+                            criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, 90, "Tração com cotovelos encostados às costelas."),
+                            criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_isolador, reps_tier3, rpe_alvo, 75, "Foco peitoral com amplitude protegida."),
+                            criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier4, rpe_alvo, 60, "Tensão contínua em todo o arco de movimento.")
                         ][:max_ex]
                     },
                     {
@@ -823,12 +839,12 @@ class ServicoCoachIA:
                         "tempo_estimado_minutos": duracao,
                         "exercicios": [
                             # Bloco 1: Pernas contíguas
-                            criar_ex("leg_press_45", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Amplitude profunda e confortável sem retroversão."),
-                            criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isolamento contínuo dos flexores."),
+                            criar_ex("leg_press_45", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Amplitude profunda e confortável sem retroversão."),
+                            criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Isolamento contínuo dos flexores."),
                             criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Pausa de 1 segundo no topo."),
                             # Bloco 2: Tronco contíguo
-                            criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Contração escapular de 1 segundo no final."),
-                            criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Abertura da corda na fase concêntrica máxima.")
+                            criar_ex("puxada_triangulo", s_secundario, reps_tier2, rpe_alvo, 90, "Contração escapular de 1 segundo no final."),
+                            criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Abertura da corda na fase concêntrica máxima.")
                         ][:max_ex]
                     }
                 ]
@@ -842,11 +858,11 @@ class ServicoCoachIA:
                     "foco": "Peitoral, Dorsais e Cintura Escapular",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Cotovelos a 45º para total conforto articular."),
-                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Estabilidade do tronco e tração controlada."),
-                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
-                        criar_ex("puxada_triangulo", s_isolador, reps_isol, rpe_alvo, 75, "Contração escapular de 1 segundo no pico."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Controlo excêntrico sem balanço.")
+                        criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Cotovelos a 45º para total conforto articular."),
+                        criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Estabilidade do tronco e tração controlada."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_tier3, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
+                        criar_ex("puxada_triangulo", s_isolador, reps_tier3, rpe_alvo, 75, "Contração escapular de 1 segundo no pico."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Controlo excêntrico sem balanço.")
                     ][:max_ex]
                 },
                 {
@@ -855,10 +871,10 @@ class ServicoCoachIA:
                     "foco": "Quadríceps, Isquiotibiais e Gémeos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Joelho alinhado com a ponta dos pés e descida em 3 segundos."),
-                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Coluna neutra e ativação dos glúteos na subida."),
-                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés na largura dos ombros na plataforma média."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Pausa de 1 segundo na contração concêntrica."),
+                        criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Joelho alinhado com a ponta dos pés e descida em 3 segundos."),
+                        criar_ex(ex_posterior, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Coluna neutra e ativação dos glúteos na subida."),
+                        criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Pés na largura dos ombros na plataforma média."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Pausa de 1 segundo na contração concêntrica."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Alongamento completo na base de cada repetição.")
                     ][:max_ex]
                 },
@@ -868,11 +884,11 @@ class ServicoCoachIA:
                     "foco": "Peitoral Superior, Costas e Bíceps",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Banco a 30 graus com pegada anatómica."),
-                        criar_ex("puxada_frente_polia", s_secundario, reps_comp, rpe_alvo, 90, "Pegada aberta pronada para expansão dorsal."),
-                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Tensão máxima na cabeça lateral do deltoide."),
-                        criar_ex("remada_unilateral_haltere" if tem_onco_mama else "crucifixo_cabos", s_isolador, reps_isol, rpe_alvo, 75, "Pico de contração controlado."),
-                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Alongamento e tensão no braquial e bíceps.")
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Banco a 30 graus com pegada anatómica."),
+                        criar_ex("puxada_frente_polia", s_secundario, reps_tier2, rpe_alvo, 90, "Pegada aberta pronada para expansão dorsal."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Tensão máxima na cabeça lateral do deltoide."),
+                        criar_ex("remada_unilateral_haltere" if tem_onco_mama else "crucifixo_cabos", s_isolador, reps_tier3, rpe_alvo, 75, "Pico de contração controlado."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Alongamento e tensão no braquial e bíceps.")
                     ][:max_ex]
                 },
                 {
@@ -881,10 +897,10 @@ class ServicoCoachIA:
                     "foco": "Glúteos, Isquiotibiais e Unilaterais",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Pausa de 2 segundos no topo sem hiperestender a lombar."),
-                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Tronco ligeiramente inclinado para frente para enfatizar o glúteo."),
-                        criar_ex("extensao_pernas", s_isolador, reps_isol, rpe_alvo, 75, "Cadência lenta sem impulsos bruscos."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Amplitude total com tensão excêntrica."),
+                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Pausa de 2 segundos no topo sem hiperestender a lombar."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_tier2, rpe_alvo, 90, "Tronco ligeiramente inclinado para frente para enfatizar o glúteo."),
+                        criar_ex("extensao_pernas", s_isolador, reps_tier3, rpe_alvo, 75, "Cadência lenta sem impulsos bruscos."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Amplitude total com tensão excêntrica."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Subida explosiva e descida em 3 segundos.")
                     ][:max_ex]
                 }
@@ -899,11 +915,11 @@ class ServicoCoachIA:
                     "foco": "Empurrar - Cintura Escapular",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Cotovelos alinhados a 45º."),
-                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Movimento seguro no plano escapular."),
-                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_isolador, reps_isol, rpe_alvo, 75, "Peitoral clavicular."),
-                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Isolamento de deltoide lateral."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Extensão sem balanço.")
+                        criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Cotovelos alinhados a 45º."),
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_secundario, reps_tier2, rpe_alvo, 90, "Peitoral clavicular."),
+                        criar_ex(ex_desenvolvimento, s_isolador, reps_tier3, rpe_alvo, 75, "Movimento seguro no plano escapular."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier4, rpe_alvo, 60, "Isolamento de deltoide lateral."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Extensão sem balanço.")
                     ][:max_ex]
                 },
                 {
@@ -912,10 +928,10 @@ class ServicoCoachIA:
                     "foco": "Puxar - Espessura e Largura Dorsal",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Tração vertical limpa."),
-                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Remada com cotovelos fechados."),
-                        criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Saúde dos rotadores externos."),
-                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Braquial e flexores do cotovelo.")
+                        criar_ex("puxada_frente_polia", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Tração vertical limpa."),
+                        criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, 90, "Remada com cotovelos fechados."),
+                        criar_ex("face_pull", s_isolador, reps_tier3, rpe_alvo, 60, "Saúde dos rotadores externos."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Braquial e flexores do cotovelo.")
                     ][:max_ex]
                 },
                 {
@@ -924,10 +940,10 @@ class ServicoCoachIA:
                     "foco": "Membros Inferiores Completos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
-                        criar_ex(ex_posterior, s_secundario, reps_comp, rpe_alvo, descanso_comp, "Empurrar os quadris para trás."),
-                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Descida cadenciada."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Flexores do joelho."),
+                        criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Alinhamento das rótulas com os pés."),
+                        criar_ex(ex_posterior, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Empurrar os quadris para trás."),
+                        criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Descida cadenciada."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Flexores do joelho."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos em pé.")
                     ][:max_ex]
                 },
@@ -937,10 +953,10 @@ class ServicoCoachIA:
                     "foco": "Tronco Completo e Harmonia",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Supino seguro."),
-                        criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Costas e deltoides posteriores."),
-                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Ombros laterais."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps.")
+                        criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Supino seguro."),
+                        criar_ex("puxada_triangulo", s_secundario, reps_tier2, rpe_alvo, 90, "Costas e deltoides posteriores."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Ombros laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Tríceps.")
                     ][:max_ex]
                 },
                 {
@@ -949,10 +965,10 @@ class ServicoCoachIA:
                     "foco": "Glúteos e Isquiotibiais",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Glúteos no topo."),
-                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés altos na plataforma."),
-                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Unilateral."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Isquiotibiais."),
+                        criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Glúteos no topo."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_tier2, rpe_alvo, 90, "Unilateral."),
+                        criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Pés altos na plataforma."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Isquiotibiais."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos.")
                     ][:max_ex]
                 }
@@ -967,10 +983,10 @@ class ServicoCoachIA:
                     "foco": "Empurrar com Foco Peitoral",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Supino seguro a 45º."),
-                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Ombros alinhados."),
-                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Deltoides laterais."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps corda.")
+                        criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Supino seguro a 45º."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_tier2, rpe_alvo, 90, "Ombros alinhados."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Deltoides laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Tríceps corda.")
                     ][:max_ex]
                 },
                 {
@@ -979,10 +995,10 @@ class ServicoCoachIA:
                     "foco": "Puxar com Foco Dorsal",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("puxada_frente_polia", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Puxada vertical."),
-                        criar_ex(ex_remada, s_secundario, reps_comp, rpe_alvo, 90, "Remada com pegada neutra."),
-                        criar_ex("face_pull", s_isolador, reps_isol, rpe_alvo, 60, "Rotadores externos."),
-                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Bíceps e braquial.")
+                        criar_ex("puxada_frente_polia", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Puxada vertical."),
+                        criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, 90, "Remada com pegada neutra."),
+                        criar_ex("face_pull", s_isolador, reps_tier3, rpe_alvo, 60, "Rotadores externos."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Bíceps e braquial.")
                     ][:max_ex]
                 },
                 {
@@ -991,9 +1007,9 @@ class ServicoCoachIA:
                     "foco": "Membros Inferiores - Foco Quadríceps",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_agachamento, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Agachamento cadenciado."),
-                        criar_ex("leg_press_45", s_secundario, reps_isol, rpe_alvo, 90, "Pés médios."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Flexora."),
+                        criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Agachamento cadenciado."),
+                        criar_ex("leg_press_45", s_secundario, reps_tier2, rpe_alvo, 90, "Pés médios."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier3, rpe_alvo, 75, "Flexora."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos em pé.")
                     ][:max_ex]
                 },
@@ -1003,10 +1019,10 @@ class ServicoCoachIA:
                     "foco": "Empurrar - Foco Fibras Claviculares",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Banco a 30 graus."),
-                        criar_ex(ex_desenvolvimento, s_secundario, reps_comp, rpe_alvo, 90, "Ombros seguros."),
-                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_isol, rpe_alvo, 60, "Deltoides laterais."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_isol, rpe_alvo, 60, "Tríceps.")
+                        criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Banco a 30 graus."),
+                        criar_ex(ex_desenvolvimento, s_secundario, reps_tier2, rpe_alvo, 90, "Ombros seguros."),
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Deltoides laterais."),
+                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Tríceps.")
                     ][:max_ex]
                 },
                 {
@@ -1015,10 +1031,10 @@ class ServicoCoachIA:
                     "foco": "Puxar - Espessura e Trapézio",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex("remada_unilateral_haltere", s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Remada unilateral com apoio."),
-                        criar_ex("puxada_triangulo", s_secundario, reps_comp, rpe_alvo, 90, "Contração escapular."),
-                        criar_ex("face_pull", s_detalhe, reps_isol, rpe_alvo, 60, "Proteção do manguito."),
-                        criar_ex("curl_martelo_halteres", s_braco, reps_isol, rpe_alvo, 60, "Bíceps braquial.")
+                        criar_ex("remada_unilateral_haltere", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Remada unilateral com apoio."),
+                        criar_ex("puxada_triangulo", s_secundario, reps_tier2, rpe_alvo, 90, "Contração escapular."),
+                        criar_ex("face_pull", s_detalhe, reps_tier3, rpe_alvo, 60, "Proteção do manguito."),
+                        criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Bíceps braquial.")
                     ][:max_ex]
                 },
                 {
@@ -1027,10 +1043,10 @@ class ServicoCoachIA:
                     "foco": "Isquiotibiais e Glúteos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
-                        criar_ex(ex_posterior, s_composto_base, reps_comp, rpe_alvo, descanso_comp, "Peso morto romeno focado em isquiotibiais."),
-                        criar_ex("hip_thrust_elevacao_pelvica", s_secundario, reps_comp, rpe_alvo, 90, "Pico de contração de 2 segundos."),
-                        criar_ex("agachamento_bulgaro", s_secundario, reps_comp, rpe_alvo, 90, "Unilateral cadenciado."),
-                        criar_ex("flexao_pernas_deitado", s_isolador, reps_isol, rpe_alvo, 75, "Tensão excêntrica pura."),
+                        criar_ex(ex_posterior, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Peso morto romeno focado em isquiotibiais."),
+                        criar_ex("hip_thrust_elevacao_pelvica", s_secundario, reps_tier2, rpe_alvo, 90, "Pico de contração de 2 segundos."),
+                        criar_ex("agachamento_bulgaro", s_secundario, reps_tier3, rpe_alvo, 90, "Unilateral cadenciado."),
+                        criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Tensão excêntrica pura."),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Gémeos.")
                     ][:max_ex]
                 }

@@ -287,10 +287,40 @@ async def processar_checkin_semanal(
                                 sincronizar_ajuste_dieta(sessao, perfil, nova_kcal, macros_nova_fase)
 
                                 # 5. Atualizar plano de treino
-                                plano_treino = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
+                                plano_treino = sessao.query(PlanoTreinoGuardado).filter(
+                                    PlanoTreinoGuardado.ativo == True,
+                                    PlanoTreinoGuardado.utilizador_id == uid
+                                ).first()
                                 if plano_treino:
                                     plano_treino.fase_projeto = nova_fase_tipo
                                     plano_treino.nome_fase = nova_fase_nome
+                                    try:
+                                        sessoes_ck = json.loads(plano_treino.sessoes_json or "[]")
+                                        tipo_f_lower = (nova_fase_tipo or "").lower()
+                                        ck_is_bulk = any(k in tipo_f_lower for k in ["bulk", "hipertrofia", "ganho", "massa"])
+                                        ck_is_cut = any(k in tipo_f_lower for k in ["cut", "defin", "defice", "perda"])
+                                        ck_is_deload = any(k in tipo_f_lower for k in ["deload", "readapt", "recup", "manuten"])
+                                        for s_ck in sessoes_ck:
+                                            for e_idx, ex in enumerate(s_ck.get("exercicios", [])):
+                                                if e_idx == 0:
+                                                    ex["series"] = max(3, min(5, int(ex.get("series", 3)) + 1)) if ck_is_bulk else (2 if ck_is_deload else 3)
+                                                    ex["repeticoes"] = "8-10" if ck_is_deload else "6-8"
+                                                    ex["rpe_alvo"] = 6.5 if ck_is_deload else 8.5
+                                                elif e_idx == 1:
+                                                    ex["series"] = 2 if ck_is_deload else 3
+                                                    ex["repeticoes"] = "10-12" if ck_is_deload else "8-10"
+                                                    ex["rpe_alvo"] = 6.5 if ck_is_deload else 8.0
+                                                elif e_idx == 2:
+                                                    ex["series"] = 2 if ck_is_deload else 3
+                                                    ex["repeticoes"] = "12-15" if ck_is_deload else "10-12"
+                                                    ex["rpe_alvo"] = 6.0 if ck_is_deload else 8.0
+                                                else:
+                                                    ex["series"] = 2 if ck_is_deload else 3
+                                                    ex["repeticoes"] = "12-15"
+                                                    ex["rpe_alvo"] = 6.0 if ck_is_deload else 8.5
+                                        plano_treino.sessoes_json = json.dumps(sessoes_ck)
+                                    except Exception as err_s:
+                                        print(f"[Checkin] Erro ao adaptar sessoes do plano: {err_s}")
                                     plano_treino.atualizado_em = datetime.utcnow()
 
                                 sessao.commit()

@@ -21,7 +21,8 @@ from ..esquemas.esquemas import (
 from ..motor_matematico import (
     calcular_composicao_e_tdee,
     calcular_distribuicao_macros,
-    projetar_trajetoria_meta
+    projetar_trajetoria_meta,
+    gerar_plano_treino_otimizado
 )
 
 roteador_perfil = APIRouter(prefix="/api/perfil", tags=["Perfil e Metas"])
@@ -183,7 +184,10 @@ def ativar_fase_projeto(
 
     # 1. Sincronizar imediatamente o registo diário de consumo de hoje
     data_hoje = datetime.utcnow().strftime("%Y-%m-%d")
-    registo_hoje = sessao.query(RegistoDiarioConsumo).filter(RegistoDiarioConsumo.data == data_hoje).first()
+    registo_hoje = sessao.query(RegistoDiarioConsumo).filter(
+        RegistoDiarioConsumo.data == data_hoje,
+        RegistoDiarioConsumo.utilizador_id == uid
+    ).first()
 
     peso_ref = perfil.peso_atual or 78.0
     if "cut" in dados.fase_tipo.lower() or "definicao" in dados.fase_tipo.lower():
@@ -201,6 +205,7 @@ def ativar_fase_projeto(
         registo_hoje.gordura_alvo_g = g_alvo
     else:
         novo_registo = RegistoDiarioConsumo(
+            utilizador_id=uid,
             data=data_hoje,
             calorias_alvo=dados.calorias_diarias,
             proteina_alvo_g=p_alvo,
@@ -214,10 +219,12 @@ def ativar_fase_projeto(
         sessao.add(novo_registo)
 
     # 2. Gerir o plano de dieta por fase (preservar dieta e histórico de alterações das fases anteriores)
-    plano_ativo = sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.ativo == True).first()
+    plano_ativo = sessao.query(PlanoDietaGuardado).filter(
+        PlanoDietaGuardado.ativo == True,
+        PlanoDietaGuardado.utilizador_id == uid
+    ).first()
 
     if plano_ativo and plano_ativo.nome_fase == dados.nome_fase:
-        # Já é o plano associado a esta fase! Apenas sincronizar calorias e macros caso difiram
         plano_ativo.fase_projeto = dados.fase_tipo
         if plano_ativo.calorias > 0 and abs(plano_ativo.calorias - dados.calorias_diarias) > 1.0:
             fator_escala = dados.calorias_diarias / plano_ativo.calorias
@@ -243,22 +250,18 @@ def ativar_fase_projeto(
                 pass
         plano_ativo.atualizado_em = datetime.utcnow()
     else:
-        # Transição de fase: congelar a dieta e histórico da fase anterior e ativar/criar a da nova fase
         plano_existente_fase = sessao.query(PlanoDietaGuardado).filter(
-            (PlanoDietaGuardado.nome_fase == dados.nome_fase) | 
-            ((PlanoDietaGuardado.fase_projeto == dados.fase_tipo) & (PlanoDietaGuardado.nome_fase != None))
+            PlanoDietaGuardado.utilizador_id == uid,
+            ((PlanoDietaGuardado.nome_fase == dados.nome_fase) | 
+            ((PlanoDietaGuardado.fase_projeto == dados.fase_tipo) & (PlanoDietaGuardado.nome_fase != None)))
         ).first()
 
-        # Desativar plano anterior mantendo-o intacto
-        sessao.query(PlanoDietaGuardado).update({"ativo": False})
+        sessao.query(PlanoDietaGuardado).filter(PlanoDietaGuardado.utilizador_id == uid).update({"ativo": False})
 
         if plano_existente_fase:
-            # Reativar a dieta já existente guardada para esta fase
             plano_existente_fase.ativo = True
             plano_existente_fase.atualizado_em = datetime.utcnow()
         else:
-            # Criar um novo plano exclusivo para esta nova fase
-            # Herdamos os alimentos e distribuição da fase anterior escalados para as kcal da nova fase
             refeicoes_herdadas = []
             if plano_ativo:
                 if not plano_ativo.nome_fase:
@@ -282,6 +285,7 @@ def ativar_fase_projeto(
                     refeicoes_herdadas = []
 
             novo_plano = PlanoDietaGuardado(
+                utilizador_id=uid,
                 nome=f"Dieta - {dados.nome_fase}",
                 id_projeto=proj_entidade.id if proj_entidade else None,
                 nome_projeto=proj_entidade.nome if proj_entidade else (dados.nome_projeto or None),
@@ -299,8 +303,23 @@ def ativar_fase_projeto(
             )
             sessao.add(novo_plano)
 
-    # 3. Gerir o plano de treino por fase (preservar treino e histórico de adaptações das fases anteriores)
-    plano_treino_ativo = sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.ativo == True).first()
+    # 3. Gerir o plano de treino por fase:
+    # PRESERVAR os exercícios atuais do atleta e ADAPTAR séries, repetições e RPE para a nova fase!
+    plano_treino_ativo = sessao.query(PlanoTreinoGuardado).filter(
+        PlanoTreinoGuardado.utilizador_id == uid,
+        PlanoTreinoGuardado.ativo == True
+    ).first()
+
+    if not plano_treino_ativo and proj_entidade:
+        plano_treino_ativo = sessao.query(PlanoTreinoGuardado).filter(
+            PlanoTreinoGuardado.utilizador_id == uid,
+            PlanoTreinoGuardado.id_projeto == proj_entidade.id
+        ).order_by(PlanoTreinoGuardado.id.desc()).first()
+
+    if not plano_treino_ativo:
+        plano_treino_ativo = sessao.query(PlanoTreinoGuardado).filter(
+            PlanoTreinoGuardado.utilizador_id == uid
+        ).order_by(PlanoTreinoGuardado.id.desc()).first()
 
     if plano_treino_ativo and plano_treino_ativo.nome_fase == dados.nome_fase:
         plano_treino_ativo.fase_projeto = dados.fase_tipo
@@ -308,47 +327,194 @@ def ativar_fase_projeto(
     else:
         # Transição de fase no treino
         plano_treino_existente = sessao.query(PlanoTreinoGuardado).filter(
+            PlanoTreinoGuardado.utilizador_id == uid,
             (PlanoTreinoGuardado.nome_fase == dados.nome_fase) |
             ((PlanoTreinoGuardado.fase_projeto == dados.fase_tipo) & (PlanoTreinoGuardado.nome_fase != None))
         ).first()
 
-        # Desativar treinos anteriores mantendo-os intactos
-        sessao.query(PlanoTreinoGuardado).update({"ativo": False})
+        # Desativar treinos anteriores deste atleta mantendo histórico
+        sessao.query(PlanoTreinoGuardado).filter(PlanoTreinoGuardado.utilizador_id == uid).update({"ativo": False})
 
+        sessoes_existentes = []
         if plano_treino_existente:
+            try:
+                sessoes_existentes = json.loads(plano_treino_existente.sessoes_json or "[]")
+            except Exception:
+                sessoes_existentes = []
+
+        if plano_treino_existente and len(sessoes_existentes) > 0:
+            # Reativar plano já existente para esta fase que já possui sessões válidas
             plano_treino_existente.ativo = True
+            plano_treino_existente.fase_projeto = dados.fase_tipo
+            plano_treino_existente.nome_fase = dados.nome_fase
             plano_treino_existente.atualizado_em = datetime.utcnow()
         else:
+            # ADAPTAÇÃO INTELIGENTE: Preservar exercícios já realizados e ajustar séries, reps e RPE
             sessoes_herdadas = []
             divisao_nome = "Plano Adaptativo da Fase"
             dias_treino = 4
             tempo_min = 60
+
             if plano_treino_ativo:
                 if not plano_treino_ativo.nome_fase:
                     plano_treino_ativo.nome_fase = "Fase Anterior"
                 try:
                     sessoes_herdadas = json.loads(plano_treino_ativo.sessoes_json or "[]")
                     divisao_nome = plano_treino_ativo.divisao or plano_treino_ativo.nome
-                    dias_treino = plano_treino_ativo.dias_semana
-                    tempo_min = plano_treino_ativo.tempo_sessao_minutos
+                    dias_treino = plano_treino_ativo.dias_semana or 4
+                    tempo_min = plano_treino_ativo.tempo_sessao_minutos or 60
                 except Exception:
                     sessoes_herdadas = []
 
-            novo_treino = PlanoTreinoGuardado(
-                nome=f"Treino - {dados.nome_fase}",
-                id_projeto=proj_entidade.id if proj_entidade else None,
-                nome_projeto=proj_entidade.nome if proj_entidade else (dados.nome_projeto or None),
-                divisao=divisao_nome,
-                dias_semana=dias_treino,
-                tempo_sessao_minutos=tempo_min,
-                fase_projeto=dados.fase_tipo,
-                nome_fase=dados.nome_fase,
-                ativo=True,
-                sessoes_json=json.dumps(sessoes_herdadas),
-                historico_alteracoes_json="[]",
-                atualizado_em=datetime.utcnow()
-            )
-            sessao.add(novo_treino)
+            tipo_fase_lower = (dados.fase_tipo or "").lower()
+            is_bulk = any(k in tipo_fase_lower for k in ["bulk", "hipertrofia", "ganho", "massa"])
+            is_cut = any(k in tipo_fase_lower for k in ["cut", "defin", "defice", "perda"])
+            is_deload = any(k in tipo_fase_lower for k in ["deload", "readapt", "recup", "manuten"])
+
+            if sessoes_herdadas and len(sessoes_herdadas) > 0:
+                for s_item in sessoes_herdadas:
+                    exercicios_lista = s_item.get("exercicios", [])
+                    for e_idx, ex in enumerate(exercicios_lista):
+                        if e_idx == 0:
+                            # 1º Exercício: Composto principal pesado (único com 6-8 reps)
+                            if is_bulk:
+                                ex["series"] = max(3, min(5, int(ex.get("series", 3)) + 1))
+                                ex["repeticoes"] = "6-8"
+                                ex["rpe_alvo"] = 8.5
+                                ex["descanso_segundos"] = 120
+                            elif is_cut:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "6-8"
+                                ex["rpe_alvo"] = 8.5
+                                ex["descanso_segundos"] = 120
+                            elif is_deload:
+                                ex["series"] = 2
+                                ex["repeticoes"] = "8-10"
+                                ex["rpe_alvo"] = 6.5
+                                ex["descanso_segundos"] = 90
+                            else:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "6-8"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 120
+                        elif e_idx == 1:
+                            # 2º Exercício: Composto secundário (8-10 reps)
+                            if is_bulk:
+                                ex["series"] = max(3, min(4, int(ex.get("series", 3))))
+                                ex["repeticoes"] = "8-10"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 90
+                            elif is_cut:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "8-10"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 90
+                            elif is_deload:
+                                ex["series"] = 2
+                                ex["repeticoes"] = "10-12"
+                                ex["rpe_alvo"] = 6.5
+                                ex["descanso_segundos"] = 75
+                            else:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "8-10"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 90
+                        elif e_idx == 2:
+                            # 3º Exercício: Acessório ou máquina (10-12 reps)
+                            if is_bulk:
+                                ex["series"] = max(3, min(4, int(ex.get("series", 3))))
+                                ex["repeticoes"] = "10-12"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 75
+                            elif is_cut:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "10-12"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 75
+                            elif is_deload:
+                                ex["series"] = 2
+                                ex["repeticoes"] = "12-15"
+                                ex["rpe_alvo"] = 6.0
+                                ex["descanso_segundos"] = 60
+                            else:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "10-12"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 75
+                        else:
+                            # 4º Exercício em diante: Isolamentos, braços e elevações (12-15 reps)
+                            if is_bulk:
+                                ex["series"] = max(3, min(4, int(ex.get("series", 3))))
+                                ex["repeticoes"] = "12-15"
+                                ex["rpe_alvo"] = 8.5
+                                ex["descanso_segundos"] = 60
+                            elif is_cut:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "12-15"
+                                ex["rpe_alvo"] = 8.5
+                                ex["descanso_segundos"] = 60
+                            elif is_deload:
+                                ex["series"] = 2
+                                ex["repeticoes"] = "12-15"
+                                ex["rpe_alvo"] = 6.0
+                                ex["descanso_segundos"] = 60
+                            else:
+                                ex["series"] = 3
+                                ex["repeticoes"] = "12-15"
+                                ex["rpe_alvo"] = 8.0
+                                ex["descanso_segundos"] = 60
+            else:
+                # Caso extremo sem sessões herdadas: gerar plano completo matematicamente equilibrado
+                plano_gerado = gerar_plano_treino_otimizado(
+                    dias_semana=dias_treino,
+                    tempo_sessao_minutos=tempo_min,
+                    foco_personalizado=dados.fase_tipo
+                )
+                from dataclasses import asdict, is_dataclass
+                plano_dict = asdict(plano_gerado) if is_dataclass(plano_gerado) else (plano_gerado if isinstance(plano_gerado, dict) else getattr(plano_gerado, "__dict__", {}))
+                sessoes_herdadas = plano_dict.get("sessoes", [])
+                divisao_nome = plano_dict.get("nome_divisao", divisao_nome)
+
+            historico_novo = [
+                {
+                    "id": f"fase_{int(datetime.utcnow().timestamp())}",
+                    "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "tipo": "transicao_fase",
+                    "sessao": "Geral",
+                    "exercicio_origem": "-",
+                    "exercicio_substituto": "-",
+                    "grupo_muscular": "-",
+                    "motivo": f"Transição para a Fase '{dados.nome_fase}': Exercícios preservados e séries/repetições/RPE adaptados para o perfil de {dados.fase_tipo.upper()}."
+                }
+            ]
+
+            if plano_treino_existente:
+                plano_treino_existente.ativo = True
+                plano_treino_existente.sessoes_json = json.dumps(sessoes_herdadas)
+                plano_treino_existente.fase_projeto = dados.fase_tipo
+                plano_treino_existente.nome_fase = dados.nome_fase
+                plano_treino_existente.divisao = divisao_nome
+                plano_treino_existente.dias_semana = dias_treino
+                plano_treino_existente.tempo_sessao_minutos = tempo_min
+                plano_treino_existente.historico_alteracoes_json = json.dumps(historico_novo)
+                plano_treino_existente.atualizado_em = datetime.utcnow()
+            else:
+                novo_treino = PlanoTreinoGuardado(
+                    utilizador_id=uid,
+                    nome=f"Treino - {dados.nome_fase}",
+                    id_projeto=proj_entidade.id if proj_entidade else None,
+                    nome_projeto=proj_entidade.nome if proj_entidade else (dados.nome_projeto or None),
+                    divisao=divisao_nome,
+                    dias_semana=dias_treino,
+                    tempo_sessao_minutos=tempo_min,
+                    fase_projeto=dados.fase_tipo,
+                    nome_fase=dados.nome_fase,
+                    ativo=True,
+                    sessoes_json=json.dumps(sessoes_herdadas),
+                    historico_alteracoes_json=json.dumps(historico_novo),
+                    atualizado_em=datetime.utcnow()
+                )
+                sessao.add(novo_treino)
 
     sessao.commit()
     sessao.refresh(perfil)

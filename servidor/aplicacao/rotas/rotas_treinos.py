@@ -152,12 +152,14 @@ def obter_plano_ativo(
         perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
         fase = perfil.fase_atual if perfil else "bulk"
         plano_padrao = gerar_plano_treino_otimizado(dias_semana=4, tempo_sessao_minutos=60)
-        sessoes_iniciais = plano_padrao.get("sessoes", [])
+        from dataclasses import asdict, is_dataclass
+        plano_dict = asdict(plano_padrao) if is_dataclass(plano_padrao) else (plano_padrao if isinstance(plano_padrao, dict) else getattr(plano_padrao, "__dict__", {}))
+        sessoes_iniciais = plano_dict.get("sessoes", [])
         plano = PlanoTreinoGuardado(
             utilizador_id=uid,
-            nome=plano_padrao.get("nome_divisao", "Plano Recomendado"),
-            divisao=plano_padrao.get("nome_divisao", "Upper / Lower"),
-            dias_semana=plano_padrao.get("dias_por_semana", 4),
+            nome=plano_dict.get("nome_divisao", "Plano Recomendado"),
+            divisao=plano_dict.get("nome_divisao", "Upper / Lower"),
+            dias_semana=plano_dict.get("dias_por_semana", 4),
             tempo_sessao_minutos=60,
             fase_projeto=fase,
             nome_fase="Fase Inicial",
