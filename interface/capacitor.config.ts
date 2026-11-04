@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'BInov Fitness',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    androidScheme: 'http',
     cleartext: true
   }
 };

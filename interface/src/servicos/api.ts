@@ -47,7 +47,7 @@ export const obterApiBase = (): string => {
   }
 
   // Endereço do túnel Cloudflare seguro ativo por omissão para o APK
-  return 'https://senators-jersey-political-pursuit.trycloudflare.com/api';
+  return 'http://10.0.0.1:8000/api';
 };
 
 // Objeto com conversão automática para string, garantindo compatibilidade com todas as chamadas ${API_BASE}/...
