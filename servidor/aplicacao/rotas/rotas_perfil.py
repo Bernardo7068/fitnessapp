@@ -398,43 +398,6 @@ def listar_projetos(
         ProjetoFisiologico.criado_em.desc()
     ).all()
 
-    # Auto-migração apenas para o Administrador (utilizador 1)
-    if uid == 1 and not projetos and perfil and perfil.projeto_ativo_json:
-        try:
-            info = json.loads(perfil.projeto_ativo_json)
-            nome_p = info.get("nome_projeto") or info.get("tipo_intencao") or f"Projeto ({info.get('peso_atual_kg', perfil.peso_atual)}kg ➔ {info.get('peso_alvo_kg', perfil.peso_alvo)}kg)"
-            legado = ProjetoFisiologico(
-                nome=nome_p,
-                descricao="Projeto importado do perfil ativo.",
-                tipo_intencao=info.get("tipo_intencao") or "Transformação Corporal",
-                ativo=True,
-                status="ativo",
-                peso_inicial_kg=float(info.get("peso_atual_kg") or perfil.peso_atual or 70.0),
-                peso_alvo_kg=float(info.get("peso_alvo_kg") or perfil.peso_alvo or 60.0),
-                bf_inicial=float(perfil.bf_atual or 15.0),
-                bf_alvo=float(perfil.bf_alvo or 10.0),
-                fase_atual_tipo=info.get("fase_tipo") or perfil.fase_atual or "cut",
-                fase_atual_nome=info.get("nome_fase") or "Fase 1",
-                data_inicio_fase=info.get("data_inicio_fase") or datetime.utcnow().isoformat(),
-                data_inicio_projeto=info.get("data_inicio_projeto") or datetime.utcnow().isoformat(),
-                fases_json=json.dumps(info.get("fases", [])),
-                relatorio_completo_json=json.dumps(info.get("relatorio", {}))
-            )
-            sessao.add(legado)
-            sessao.commit()
-            sessao.refresh(legado)
-
-            # Associar planos e check-ins existentes a este projeto
-            sessao.query(PlanoTreinoGuardado).update({"id_projeto": legado.id, "nome_projeto": legado.nome})
-            sessao.query(PlanoDietaGuardado).update({"id_projeto": legado.id, "nome_projeto": legado.nome})
-            sessao.query(RegistoCheckIn).update({"id_projeto": legado.id, "nome_projeto": legado.nome})
-            sessao.commit()
-
-            projetos = [legado]
-        except Exception as e:
-            print(f"[Projetos] Erro na auto-migração de projeto legado: {e}")
-
-    resultado = []
     for p in projetos:
         fases = []
         try:
@@ -894,23 +857,54 @@ def atualizar_projeto(id_proj: int, dados: EsquemaAtualizarProjeto, sessao: Sess
 
 
 @roteador_perfil.delete("/projetos/{id_proj}")
-def eliminar_projeto(id_proj: int, sessao: Session = Depends(obter_sessao_bd)):
+def eliminar_projeto(
+    id_proj: int,
+    sessao: Session = Depends(obter_sessao_bd),
+    usuario: Optional[ContaUtilizador] = Depends(obter_utilizador_opcional)
+):
     """
-    Elimina ou arquiva um projeto.
+    Elimina um projeto de forma definitiva e atualiza o perfil ativo.
     """
-    proj = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.id == id_proj).first()
+    uid = resolver_utilizador_id(usuario)
+    perfil = obter_ou_criar_perfil(sessao, uid)
+    proj = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.id == id_proj, ProjetoFisiologico.utilizador_id == uid).first()
     if not proj:
-        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+        raise HTTPException(status_code=404, detail="Projeto n?o encontrado")
 
-    if proj.ativo:
-        # Se for o ativo, tentar ativar outro se existir
-        outro = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.id != id_proj).first()
-        if outro:
-            outro.ativo = True
-
+    era_ativo = bool(proj.ativo)
     sessao.delete(proj)
     sessao.commit()
+
+    if era_ativo:
+        outro = sessao.query(ProjetoFisiologico).filter(ProjetoFisiologico.utilizador_id == uid).order_by(ProjetoFisiologico.criado_em.desc()).first()
+        if outro:
+            outro.ativo = True
+            sessao.commit()
+            perfil.fase_atual = outro.fase_atual_tipo
+            perfil.peso_alvo = outro.peso_alvo_kg
+            perfil.bf_alvo = outro.bf_alvo
+            try:
+                fases_outro = json.loads(outro.fases_json or "[]")
+            except Exception:
+                fases_outro = []
+            info = {
+                "id_projeto": outro.id,
+                "nome_projeto": outro.nome,
+                "fase_tipo": outro.fase_atual_tipo,
+                "nome_fase": outro.fase_atual_nome,
+                "tipo_intencao": outro.tipo_intencao,
+                "peso_atual_kg": outro.peso_inicial_kg,
+                "peso_alvo_kg": outro.peso_alvo_kg,
+                "fases": fases_outro
+            }
+            perfil.projeto_ativo_json = json.dumps(info)
+        else:
+            perfil.projeto_ativo_json = None
+            perfil.fase_atual = "manutencao"
+        sessao.commit()
+
     return {"mensagem": "Projeto removido com sucesso"}
+
 
 
 # ==============================================================================

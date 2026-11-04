@@ -327,11 +327,18 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
       await ServicoApi.eliminarProjeto(id);
       const projsAtualizados = await ServicoApi.obterProjetos();
       setProjetos(projsAtualizados);
-      const ativo = projsAtualizados.find((p) => p.ativo) || projsAtualizados[0] || null;
-      setProjetoAtivo(projsAtualizados.find((p) => p.ativo) || null);
-      setProjetoEmFoco(ativo);
-      if (ativo) {
-        await carregarDetalhesDoProjeto(ativo.id);
+      if (!projsAtualizados || projsAtualizados.length === 0) {
+        setProjetoAtivo(null);
+        setProjetoEmFoco(null);
+        setDetalhesProjetoFoco(null);
+        setAbaPrincipal('novo');
+      } else {
+        const ativo = projsAtualizados.find((p) => p.ativo) || projsAtualizados[0] || null;
+        setProjetoAtivo(projsAtualizados.find((p) => p.ativo) || null);
+        setProjetoEmFoco(ativo);
+        if (ativo) {
+          await carregarDetalhesDoProjeto(ativo.id);
+        }
       }
       setMensagemSucesso(`Projeto "${nome}" removido.`);
       setTimeout(() => setMensagemSucesso(''), 5000);
@@ -1695,7 +1702,6 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   onClick={() => {
                     const texto = 'Estou há 3 meses parado por lesão no acromioclavicular, preciso de tempo para recuperar estímulo e andamento com proteção articular.';
                     setObservacoesContexto((prev) => prev ? `${prev} | ${texto}` : texto);
-                    setEstrategiaInicial('retorno_reabilitacao_bulk');
                   }}
                   className="px-2 py-0.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-[10px] text-emerald-300 hover:bg-emerald-900/60 transition-all"
                 >
@@ -1706,7 +1712,6 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
                   onClick={() => {
                     const texto = 'Parado há vários meses, preciso de fase de readaptação motora e condicionamento antes de progredir cargas.';
                     setObservacoesContexto((prev) => prev ? `${prev} | ${texto}` : texto);
-                    setEstrategiaInicial('retorno_reabilitacao_bulk');
                   }}
                   className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] text-slate-300 hover:bg-slate-700 transition-all"
                 >
