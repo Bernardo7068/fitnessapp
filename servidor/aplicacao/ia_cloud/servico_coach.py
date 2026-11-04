@@ -1194,6 +1194,28 @@ class ServicoCoachIA:
         evitados = str(dados_dieta.get("alimentos_evitados") or "").lower()
         apetite = str(dados_dieta.get("habitos_apetite") or "").lower()
         dificeis = str(dados_dieta.get("alimentos_dificeis") or "").lower()
+        def _tokenizar_lista(texto: str) -> List[str]:
+            itens = [i.strip() for i in re.split(r"[,\n;|/]+", texto.lower())]
+            return [i for i in itens if i]
+
+        preferidos_tokens = _tokenizar_lista(preferidos)
+        evitados_tokens = _tokenizar_lista(evitados)
+
+        categorias_alias = {
+            "arroz": ["arroz", "arroz branco", "arroz basmati", "arroz integral"],
+            "batata": ["batata", "batata doce", "batata-doce", "batata inglesa"],
+            "massa": ["massa", "pasta", "esparguete", "macarrao", "macarrão"],
+            "frango": ["frango", "peito de frango"],
+            "vaca": ["vaca", "carne de vaca", "carne bovina", "bovina"],
+            "salmao": ["salmao", "salmão"],
+        }
+
+        def prefere_categoria(categoria: str) -> bool:
+            aliases = categorias_alias.get(categoria, [categoria])
+            return any(
+                any(alias in token or token in alias for alias in aliases)
+                for token in preferidos_tokens
+            )
 
         peso_ref = float(dados_dieta.get("peso_atual") or 70.0)
         sexo = str(dados_dieta.get("sexo") or "masculino").lower()
@@ -1336,9 +1358,8 @@ class ServicoCoachIA:
                 return False
             nome_alimento = TABELA_ALIMENTOS_EQUIVALENCIAS[chave_alim]["nome"].lower()
             chave_low = chave_alim.lower()
-            for ev in evitados.replace(",", ";").split(";"):
-                ev_strip = ev.strip()
-                if ev_strip and (ev_strip in nome_alimento or ev_strip in chave_low):
+            for ev in evitados_tokens:
+                if ev and (ev in nome_alimento or ev in chave_low):
                     return False
             return True
 
@@ -1385,11 +1406,11 @@ class ServicoCoachIA:
             # Se for almoço ou jantar
             elif "Almoço" in titulo or "Jantar" in titulo:
                 # Escolher fonte de amido principal
-                if "arroz" in preferidos and aceita("arroz_branco_cozido"):
+                if prefere_categoria("arroz") and aceita("arroz_branco_cozido"):
                     c_id = "arroz_branco_cozido"
-                elif "batata" in preferidos and aceita("batata_doce_cozida"):
+                elif prefere_categoria("batata") and aceita("batata_doce_cozida"):
                     c_id = "batata_doce_cozida"
-                elif "massa" in preferidos and aceita("massa_cozida"):
+                elif prefere_categoria("massa") and aceita("massa_cozida"):
                     c_id = "massa_cozida"
                 else:
                     c_id = "arroz_branco_cozido" if aceita("arroz_branco_cozido") else "batata_inglesa_cozida"
@@ -1397,9 +1418,9 @@ class ServicoCoachIA:
                 # Escolher proteína principal
                 if "frango" in dificeis and aceita("carne_vaca_magra"):
                     p_id = "carne_vaca_magra"
-                elif "vaca" in preferidos and aceita("carne_vaca_magra"):
+                elif prefere_categoria("vaca") and aceita("carne_vaca_magra"):
                     p_id = "carne_vaca_magra"
-                elif "salmao" in preferidos and aceita("salmao_grelhado"):
+                elif prefere_categoria("salmao") and aceita("salmao_grelhado"):
                     p_id = "salmao_grelhado"
                 elif aceita("peito_frango_grelhado"):
                     p_id = "peito_frango_grelhado"

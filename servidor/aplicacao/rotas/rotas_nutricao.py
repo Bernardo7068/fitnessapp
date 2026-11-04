@@ -65,13 +65,26 @@ def obter_plano_dieta_ativo(
         perfil = obter_ou_criar_perfil(sessao, uid, nome_padrao=usuario.nome if usuario else "Atleta")
         calorias = perfil.calorias_atuais if perfil else 2500.0
         fase = perfil.fase_atual if perfil else "bulk"
+        preferencias = {}
+        if perfil and perfil.preferencias_alimentares_json:
+            try:
+                preferencias = json.loads(perfil.preferencias_alimentares_json or "{}")
+            except Exception:
+                preferencias = {}
         
         servico = ServicoCoachIA()
         resultado = servico._gerar_dieta_personalizada_heuristica_local({
             "calorias_diarias": calorias,
             "fase_projeto": fase,
-            "numero_refeicoes": 4,
-            "horario_treino": "tarde"
+            "numero_refeicoes": int(preferencias.get("numero_refeicoes", 4) or 4),
+            "horario_treino": preferencias.get("horario_treino", "tarde") or "tarde",
+            "alimentos_preferidos": preferencias.get("alimentos_preferidos", "") or "",
+            "alimentos_evitados": preferencias.get("alimentos_evitados", "") or "",
+            "habitos_apetite": preferencias.get("habitos_apetite", "") or "",
+            "alimentos_dificeis": preferencias.get("alimentos_dificeis", "") or "",
+            "peso_atual": (perfil.peso_atual if perfil and perfil.peso_atual else 70.0),
+            "idade": (perfil.idade if perfil and perfil.idade else 25),
+            "sexo": (perfil.sexo if perfil and perfil.sexo else "masculino"),
         })
 
         plano = PlanoDietaGuardado(

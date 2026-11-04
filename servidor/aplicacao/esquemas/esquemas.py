@@ -52,6 +52,18 @@ class EsquemaGerarTreinoRequisicao(BaseModel):
     tempo_sessao_minutos: int = 60
     nivel_experiencia: str = "intermediario"
     foco: Optional[str] = None
+    # Campos opcionais para personalização avançada no fluxo "gerar" clássico
+    objetivo_especifico: Optional[str] = "hipertrofia"
+    lesoes_atuais_ou_passadas: Optional[str] = ""
+    desproporcoes_pontos_fracos: Optional[str] = ""
+    problemas_limitacoes: Optional[str] = ""
+    atividades_secundarias: Optional[str] = ""
+    cadencia_descanso: Optional[str] = "dias_fixos"
+    tipo_divisao_preferida: Optional[str] = "personalizada"
+    fase_projeto: Optional[str] = "cut"
+    calorias_diarias: Optional[float] = None
+    series_alvo_semana: Optional[int] = 14
+    cardio_minutos_semana: Optional[int] = 0
 
 
 class EsquemaProgressaoCargaRequisicao(BaseModel):

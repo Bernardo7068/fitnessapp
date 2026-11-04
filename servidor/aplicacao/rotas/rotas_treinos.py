@@ -36,7 +36,40 @@ def obter_catalogo_exercicios():
 
 @roteador_treinos.post("/gerar")
 def gerar_plano_recomendado(requisicao: EsquemaGerarTreinoRequisicao):
-    """Gera um plano de treino matematicamente equilibrado por volume (MEV/MAV)."""
+    """
+    Gera um plano de treino.
+    - Sem contexto adicional: usa o motor matemático clássico.
+    - Com contexto avançado (foco, lesões, limitações, etc.): usa o motor personalizado.
+    """
+    tem_contexto_personalizado = any([
+        bool((requisicao.foco or "").strip()),
+        bool((requisicao.lesoes_atuais_ou_passadas or "").strip()),
+        bool((requisicao.desproporcoes_pontos_fracos or "").strip()),
+        bool((requisicao.problemas_limitacoes or "").strip()),
+        bool((requisicao.atividades_secundarias or "").strip()),
+        (requisicao.objetivo_especifico or "hipertrofia").strip().lower() != "hipertrofia",
+        (requisicao.tipo_divisao_preferida or "personalizada").strip().lower() != "personalizada",
+    ])
+
+    if tem_contexto_personalizado:
+        coach = ServicoCoachIA()
+        return coach._gerar_treino_personalizado_heuristico_local({
+            "dias_semana": requisicao.dias_semana,
+            "duracao_minutos": requisicao.tempo_sessao_minutos,
+            "nivel_experiencia": requisicao.nivel_experiencia,
+            "objetivo_especifico": requisicao.objetivo_especifico or "hipertrofia",
+            "desproporcoes_pontos_fracos": requisicao.desproporcoes_pontos_fracos or requisicao.foco or "",
+            "lesoes_atuais_ou_passadas": requisicao.lesoes_atuais_ou_passadas or "",
+            "problemas_limitacoes": requisicao.problemas_limitacoes or "",
+            "atividades_secundarias": requisicao.atividades_secundarias or "",
+            "cadencia_descanso": requisicao.cadencia_descanso or "dias_fixos",
+            "tipo_divisao_preferida": requisicao.tipo_divisao_preferida or "personalizada",
+            "fase_projeto": requisicao.fase_projeto or "cut",
+            "calorias_diarias": requisicao.calorias_diarias or 2200.0,
+            "series_alvo_semana": requisicao.series_alvo_semana or 14,
+            "cardio_minutos_semana": requisicao.cardio_minutos_semana or 0,
+        })
+
     plano = gerar_plano_treino_otimizado(
         dias_semana=requisicao.dias_semana,
         tempo_sessao_minutos=requisicao.tempo_sessao_minutos,
