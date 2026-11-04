@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Smartphone, X, HelpCircle, Check, Share2, Globe, ShieldCheck } from 'lucide-react';
+import { Download, Smartphone, X, Share2, Globe, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export const BotaoInstalarPWA: React.FC = () => {
-  const [promptInstalacao, setPromptInstalacao] = useState<any>(null);
   const [instalado, setInstalado] = useState<boolean>(false);
   const [modalAjudaVisivel, setModalAjudaVisivel] = useState<boolean>(false);
   const [bannerFechado, setBannerFechado] = useState<boolean>(false);
   const [ehIOS, setEhIOS] = useState<boolean>(false);
+  const [descarregando, setDescarregando] = useState<boolean>(false);
+  const [downloadConcluido, setDownloadConcluido] = useState<boolean>(false);
 
   useEffect(() => {
-    // Detetar se já está a correr como app instalada (standalone)
+    // Se estiver no ambiente nativo do Capacitor, não mostra o banner
+    const isCapacitor =
+      typeof window !== 'undefined' &&
+      (Boolean((window as any)?.Capacitor?.isNativePlatform?.()) ||
+        Boolean((window.navigator as any)?.userAgent?.includes('wv')) ||
+        window.location.protocol === 'capacitor:');
+
+    // Se estiver a correr como app instalada (standalone)
     const emStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone === true;
 
-    if (emStandalone) {
+    if (emStandalone || isCapacitor) {
       setInstalado(true);
       return;
     }
@@ -22,40 +30,37 @@ export const BotaoInstalarPWA: React.FC = () => {
     // Detetar se é iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     setEhIOS(/iphone|ipad|ipod/.test(userAgent));
-
-    // Capturar o evento nativo do navegador
-    const tratarPrompt = (e: Event) => {
-      e.preventDefault();
-      setPromptInstalacao(e);
-      setBannerFechado(false);
-    };
-
-    window.addEventListener('beforeinstallprompt', tratarPrompt);
-    window.addEventListener('appinstalled', () => {
-      setInstalado(true);
-      setPromptInstalacao(null);
-    });
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', tratarPrompt);
-    };
   }, []);
 
-  const handleInstalarClique = async () => {
-    if (promptInstalacao) {
-      promptInstalacao.prompt();
-      const { outcome } = await promptInstalacao.userChoice;
-      if (outcome === 'accepted') {
-        setInstalado(true);
-      }
-      setPromptInstalacao(null);
-    } else {
-      // Se o navegador ainda não disparou o evento (ex: Safari ou HTTPS local), mostra o guia passo-a-passo
-      setModalAjudaVisivel(true);
-    }
+  const descarregarAPK = () => {
+    setDescarregando(true);
+    setDownloadConcluido(false);
+
+    const link = document.createElement('a');
+    link.href = '/BInov-Fitness.apk';
+    link.setAttribute('download', 'BInov-Fitness.apk');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      setDescarregando(false);
+      setDownloadConcluido(true);
+      setTimeout(() => setDownloadConcluido(false), 8000);
+    }, 1500);
   };
 
-  // Se já estiver instalado como App independente, não precisa de banner
+  const handleInstalarClique = () => {
+    if (ehIOS) {
+      setModalAjudaVisivel(true);
+      return;
+    }
+
+    // No Android e PC, descarrega o APK diretamente
+    descarregarAPK();
+  };
+
+  // Se já estiver dentro do APK ou da App independente, não precisa de banner
   if (instalado) {
     return null;
   }
@@ -72,13 +77,17 @@ export const BotaoInstalarPWA: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <h4 className="text-xs font-black text-white flex items-center gap-1.5">
-                  <span>Instalar BInov no Telemóvel</span>
+                  <span>Instalar App BInov</span>
                   <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40">
-                    App
+                    APK Nativo
                   </span>
                 </h4>
                 <p className="text-[11px] text-slate-400 truncate">
-                  Acede em ecrã inteiro sem barras de browser
+                  {downloadConcluido
+                    ? 'Download concluído! Clica no ficheiro para instalar.'
+                    : descarregando
+                    ? 'A transferir ficheiro APK...'
+                    : 'Instala no telemóvel para aceder via WireGuard'}
                 </p>
               </div>
             </div>
@@ -86,10 +95,20 @@ export const BotaoInstalarPWA: React.FC = () => {
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={handleInstalarClique}
-                className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-emerald-500/25 active:scale-95"
+                disabled={descarregando}
+                className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-emerald-500/25 active:scale-95 disabled:opacity-50"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Instalar</span>
+                {downloadConcluido ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Concluído</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{descarregando ? 'A baixar...' : 'Instalar APK'}</span>
+                  </>
+                )}
               </button>
 
               <button
@@ -114,62 +133,76 @@ export const BotaoInstalarPWA: React.FC = () => {
                   <Smartphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Como Instalar a App no Telemóvel</h3>
-                  <span className="text-xs text-slate-400">Guia rápido para Android e iOS</span>
+                  <h3 className="text-sm font-black text-white">Instalar BInov no Telemóvel</h3>
+                  <span className="text-xs text-slate-400">Instalação direta para Android ou iOS</span>
                 </div>
               </div>
               <button
                 onClick={() => setModalAjudaVisivel(false)}
                 className="p-1.5 text-slate-400 hover:text-white rounded-lg transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* Opção Android (Chrome) */}
-              <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-emerald-400">
-                  <Globe className="w-4 h-4" />
-                  <span>No Android (Google Chrome)</span>
+              {/* Opção Android (APK Nativo) */}
+              {!ehIOS && (
+                <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
+                    <Globe className="w-4 h-4" />
+                    <span>Android (Ficheiro APK Nativo)</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed">
+                    Descarrega o pacote oficial da aplicação compilado para a tua rede WireGuard.
+                  </p>
+                  <button
+                    onClick={descarregarAPK}
+                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-500/20"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Descarregar BInov-Fitness.apk</span>
+                  </button>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-400 leading-relaxed pl-1 pt-1">
+                    <li>Clica no botão acima para transferir o ficheiro.</li>
+                    <li>Quando o download terminar, toca na notificação para abrir.</li>
+                    <li>Confirma em <strong>"Instalar"</strong>. A app ficará no teu ecrã inicial.</li>
+                  </ol>
                 </div>
-                <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed pl-1">
-                  <li>Toca no menu dos <strong>3 pontinhos (⋮)</strong> no canto superior direito do Chrome.</li>
-                  <li>Seleciona a opção <strong>"Instalar aplicação"</strong> ou <strong>"Adicionar ao ecrã principal"</strong>.</li>
-                  <li>Confirma em <strong>"Instalar"</strong>. A app ficará com o ícone BInov no teu ecrã.</li>
-                </ol>
-              </div>
+              )}
 
               {/* Opção iPhone (Safari) */}
-              <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-blue-400">
-                  <Share2 className="w-4 h-4" />
-                  <span>No iPhone (Apple Safari)</span>
+              {ehIOS && (
+                <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-blue-400">
+                    <Share2 className="w-4 h-4" />
+                    <span>No iPhone (Apple Safari)</span>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed pl-1">
+                    <li>Toca no botão de <strong>Partilha</strong> (o quadrado com uma seta para cima na barra inferior).</li>
+                    <li>Desce um pouco e clica em <strong>"Ecrã Principal"</strong> (Add to Home Screen).</li>
+                    <li>Clica em <strong>"Adicionar"</strong> no canto superior direito.</li>
+                  </ol>
                 </div>
-                <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed pl-1">
-                  <li>Toca no botão de <strong>Partilha</strong> (o quadrado com uma seta para cima na barra inferior).</li>
-                  <li>Desce um pouco e clica em <strong>"Ecrã Principal"</strong> (Add to Home Screen).</li>
-                  <li>Clica em <strong>"Adicionar"</strong> no canto superior direito.</li>
-                </ol>
-              </div>
+              )}
 
-              {/* Dica Importante sobre HTTPS / Localhost */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-1">
-                <span className="font-bold flex items-center gap-1.5 text-amber-300">
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  Dica de Instalação:
+              {/* Dica sobre WireGuard */}
+              <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-200 space-y-1">
+                <span className="font-bold flex items-center gap-1.5 text-sky-300">
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                  Ligação Segura WireGuard:
                 </span>
-                <p className="text-[11px] leading-relaxed text-amber-200/90">
-                  Para o Chrome permitir a instalação, acede através do link seguro gerado por <code>iniciar_com_link_telemovel.bat</code> (com <strong>https://</strong>).
+                <p className="text-[11px] leading-relaxed text-sky-200/90">
+                  Depois de instalar o APK, liga o teu WireGuard no telemóvel e abre a app. O acesso é direto e privado.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => setModalAjudaVisivel(false)}
-              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition shadow"
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition border border-slate-700"
             >
-              Compreendido, fechar
+              Fechar
             </button>
           </div>
         </div>
