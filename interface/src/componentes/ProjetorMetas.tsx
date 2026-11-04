@@ -3,7 +3,7 @@ import {
   Target, Calendar, Flame, Dumbbell, ArrowRight, CheckCircle2, Sparkles, Scale,
   RefreshCw, AlertTriangle, Zap, FolderKanban, Check, ChevronRight, History,
   Info, Award, Plus, Trash2, Edit3, X, Eye, ShieldCheck, Utensils, Clock, Layers, Star,
-  TrendingDown, TrendingUp, ChevronDown, ChevronUp, Flag, Milestone, Trophy, ArrowLeft, BookOpen, FileText, Activity, CheckCircle
+  TrendingDown, TrendingUp, ChevronDown, ChevronUp, Flag, Milestone, Trophy, ArrowLeft, BookOpen, FileText, Activity, CheckCircle, Cpu
 } from 'lucide-react';
 import { ServicoApi } from '../servicos/api';
 import {
@@ -2750,32 +2750,53 @@ export const ProjetorMetas: React.FC<ProjetorMetasProps> = ({
               {/* PRÉ-VISUALIZAÇÃO DO TREINO GERADO */}
               {planoTreinoGerado && (
                 <div className="p-4 bg-slate-950 rounded-xl border border-emerald-500/40 space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
                     <div>
-                      <span className="text-[10px] text-emerald-400 font-black uppercase">Treino Prescrito da Fase 1</span>
-                      <h4 className="text-sm font-extrabold text-white">{planoTreinoGerado.nome_divisao}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] text-emerald-400 font-black uppercase">Treino Prescrito da Fase 1</span>
+                        {planoTreinoGerado.provedor_usado?.includes('Gemini') ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-emerald-400" /> Prescrito por Google Gemini Cloud AI
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
+                            <Cpu className="w-3 h-3 text-amber-400" /> Prescrito pelo Motor Biomecânico Local
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-sm font-extrabold text-white mt-1">{planoTreinoGerado.nome_divisao}</h4>
                     </div>
-                    <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 text-xs font-bold">
+                    <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 text-xs font-bold self-start sm:self-center shrink-0">
                       {planoTreinoGerado.sessoes?.length || diasSemanaTreino} Sessões Prontas
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                  {/* Informação sobre Provedor e Chave de IA */}
+                  {!planoTreinoGerado.provedor_usado?.includes('Gemini') && (
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-2">
+                      <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        Este plano foi calculado pelo <strong>Motor Biomecânico Local</strong> de contingência. Para gerar treinos criados 100% pelo modelo de IA <strong>Google Gemini Cloud</strong>, podes adicionar a tua chave de API Gemini no teu Perfil ou Configurações.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                     {planoTreinoGerado.sessoes?.map((sessao: any, sIdx: number) => (
                       <div key={sIdx} className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs font-bold text-white">
+                        <div className="flex items-center justify-between text-xs font-bold text-white border-b border-slate-800/60 pb-1">
                           <span>{sessao.nome || `Sessão ${String.fromCharCode(65 + sIdx)}`}</span>
-                          <span className="text-[10px] text-emerald-400 font-normal">{sessao.foco || ''}</span>
+                          <span className="text-[10px] text-emerald-400 font-normal truncate max-w-[140px] text-right">{sessao.foco || ''}</span>
                         </div>
-                        <div className="text-[11px] text-slate-400 space-y-0.5">
-                          {sessao.exercicios?.slice(0, 4).map((ex: any, eIdx: number) => (
-                            <div key={eIdx} className="truncate">
-                              • <span className="text-slate-300 font-semibold">{ex.nome}</span> ({ex.series}×{ex.repeticoes_alvo || '8-12'})
+                        <div className="text-[11px] text-slate-400 space-y-1">
+                          {sessao.exercicios?.map((ex: any, eIdx: number) => (
+                            <div key={eIdx} className="truncate flex items-center justify-between">
+                              <span className="text-slate-300 font-medium truncate">• {ex.nome}</span>
+                              <span className="text-emerald-400 font-mono text-[10px] shrink-0 ml-1">
+                                {ex.series}×{ex.repeticoes_alvo || ex.repeticoes || '8-12'}
+                              </span>
                             </div>
                           ))}
-                          {sessao.exercicios && sessao.exercicios.length > 4 && (
-                            <div className="text-[10px] text-slate-500 italic">+ {sessao.exercicios.length - 4} outros exercícios</div>
-                          )}
                         </div>
                       </div>
                     ))}

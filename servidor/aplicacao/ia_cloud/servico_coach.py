@@ -429,6 +429,7 @@ class ServicoCoachIA:
             "dicas_nutricionais_qualitativas": "\n".join(orientacoes_nutri),
             "mensagem_motivacional_personalizada": "Consistência e paciência estratégica são as tuas maiores armas anabólicas. Segue em frente!",
             "modo_demonstracao": True,
+            "provedor_usado": "Motor Biomecânico Heurístico Local (Offline / Sem Chave Gemini)",
             "aviso_configuracao": "Modo adaptativo ativo. Os cálculos cruzados de projeto, medidas e biofeedback foram aplicados com sucesso."
         }
 
@@ -685,14 +686,29 @@ class ServicoCoachIA:
             ex_agachamento = "agachamento_livre"
             ex_posterior = "peso_morto_romeno"
 
-        # Pontos Fracos
-        foco_gluteos = any(k in pontos_fracos for k in ["gluteo", "glúteo", "bumbum"])
-        foco_bracos = any(k in pontos_fracos for k in ["braco", "braço", "bicep", "tricep"])
+        # Pontos Fracos e Especialização Muscular
+        foco_treino_texto = f"{pontos_fracos} {foco_proj} {objetivos_det}".lower()
+        foco_gluteos = any(k in foco_treino_texto for k in ["gluteo", "glúteo", "bumbum"])
+        foco_bracos = any(k in foco_treino_texto for k in ["braco", "braço", "bicep", "tricep", "braquial", "antebraço", "antebraco"])
+        foco_peito = any(k in foco_treino_texto for k in ["peito", "peitoral"])
+        foco_costas = any(k in foco_treino_texto for k in ["costa", "costas", "dorsal", "dorsais", "asa", "trapezio"])
+        foco_ombros = any(k in foco_treino_texto for k in ["ombro", "ombros", "deltoide", "deltoides"])
+
         ajustes_fracos = []
-        if foco_gluteos:
-            ajustes_fracos.append("• Foco Prioritário em Glúteos: Inclusão estrutural de Hip Thrust com contração isométrica de 2 segundos.")
         if foco_bracos:
-            ajustes_fracos.append("• Foco Prioritário em Braços: Trabalho direto nos flexores e extensores do cotovelo com pegadas articulares seguras.")
+            ajustes_fracos.append(
+                "• Especialização Prioritária em Braços Ativa: Frequência e volume elevados com múltiplos exercícios para todas as porções musculares. "
+                "Bíceps estimulado na cabeça curta (barra W), cabeça longa (banco inclinado) e braquial (martelo). "
+                "Tríceps estimulado na cabeça lateral (polia/corda) e cabeça longa em estiramento (tríceps francês)."
+            )
+        if foco_gluteos:
+            ajustes_fracos.append("• Foco Prioritário em Glúteos: Inclusão estrutural de Hip Thrust com contração isométrica de 2 segundos e agachamento búlgaro.")
+        if foco_peito:
+            ajustes_fracos.append("• Foco Prioritário em Peitoral: Variação angular (reto + inclinado) e isolamento convergente em cabos.")
+        if foco_costas:
+            ajustes_fracos.append("• Foco Prioritário em Costas: Ênfase combinada em largura (puxadas verticais) e espessura (remadas horizontais).")
+        if foco_ombros:
+            ajustes_fracos.append("• Foco Prioritário em Ombros: Sobrecarga direta na cabeça lateral e deltóide posterior.")
         if not ajustes_fracos:
             ajustes_fracos.append("• Equilíbrio Muscular e Harmonia: Distribuição simétrica e proporcional entre agonistas e antagonistas.")
 
@@ -700,9 +716,10 @@ class ServicoCoachIA:
         s_composto_base = 3 if ("iniciante" in nivel_exp or tem_onco_mama) else 4
         s_secundario = 3
         s_isolador = 3
-        s_braco = 3 if foco_bracos else 2
+        s_braco = 3 if not foco_bracos else 4
         s_detalhe = 2
-        max_ex = 4 if duracao <= 45 else (5 if duracao <= 65 else 6)
+        # Se foco em braços estiver ativo, permite 6 exercícios por sessão para acomodar bíceps e tríceps
+        max_ex = 6 if foco_bracos else (4 if duracao <= 45 else (5 if duracao <= 65 else 6))
 
         def criar_ex(id_ex: str, series: int, reps_str: str, rpe: float, descanso: int, notas: str) -> Dict[str, Any]:
             ex_info = EXERCICIOS_CATALOGO.get(id_ex, {})
@@ -851,56 +868,76 @@ class ServicoCoachIA:
 
         elif dias == 4:
             nome_divisao = "Upper / Lower Adaptado 4x (IA Biomecânica)"
+            
+            # Se houver foco em braços, ambas as sessões superiores integram bíceps e tríceps
+            ex_braco_upper_a = [
+                criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Isolamento lateral do tríceps com abertura na base."),
+                criar_ex("curl_biceps_barra_w", s_braco, reps_tier4, rpe_alvo, 60, "Curl com barra W para pico do bíceps e conforto no punho.")
+            ] if foco_bracos else [
+                criar_ex("puxada_triangulo", s_isolador, reps_tier3, rpe_alvo, 75, "Contração escapular de 1 segundo no pico."),
+                criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Controlo excêntrico sem balanço.")
+            ]
+
+            ex_braco_upper_b = [
+                criar_ex("triceps_frances_cabos", s_braco, reps_tier4, rpe_alvo, 60, "Extensão acima da cabeça para enfatizar a cabeça longa do tríceps."),
+                criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Alongamento e tensão máxima no músculo braquial e braquiorradial.")
+            ] if foco_bracos else [
+                criar_ex("remada_unilateral_haltere" if tem_onco_mama else "crucifixo_cabos", s_isolador, reps_tier3, rpe_alvo, 75, "Pico de contração controlado."),
+                criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Alongamento e tensão no braquial e bíceps.")
+            ]
+
             sessoes = [
                 {
                     "nome": "Dia 1: Superior A (Upper Força & Ombros Seguros)",
                     "dia_nome": "Dia 1: Superior A (Upper Força & Ombros Seguros)",
-                    "foco": "Peitoral, Dorsais e Cintura Escapular",
+                    "foco": "Peitoral, Dorsais, Ombros e Braços" if foco_bracos else "Peitoral, Dorsais e Cintura Escapular",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
                         criar_ex(ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Cotovelos a 45º para total conforto articular."),
                         criar_ex(ex_remada, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Estabilidade do tronco e tração controlada."),
                         criar_ex(ex_desenvolvimento, s_secundario, reps_tier3, rpe_alvo, 90, "Pegada neutra para descompressão articular."),
-                        criar_ex("puxada_triangulo", s_isolador, reps_tier3, rpe_alvo, 75, "Contração escapular de 1 segundo no pico."),
-                        criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Controlo excêntrico sem balanço.")
+                        *ex_braco_upper_a,
+                        criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Tensão máxima na cabeça lateral do deltoide.")
                     ][:max_ex]
                 },
                 {
                     "nome": "Dia 2: Inferior A (Lower Quadríceps & Joelhos Protegidos)",
                     "dia_nome": "Dia 2: Inferior A (Lower Quadríceps & Joelhos Protegidos)",
-                    "foco": "Quadríceps, Isquiotibiais e Gémeos",
+                    "foco": "Quadríceps, Isquiotibiais e Braços (Especialização)" if foco_bracos else "Quadríceps, Isquiotibiais e Gémeos",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
                         criar_ex(ex_agachamento, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Joelho alinhado com a ponta dos pés e descida em 3 segundos."),
                         criar_ex(ex_posterior, s_secundario, reps_tier2, rpe_alvo, descanso_comp, "Coluna neutra e ativação dos glúteos na subida."),
                         criar_ex("leg_press_45", s_secundario, reps_tier3, rpe_alvo, 90, "Pés na largura dos ombros na plataforma média."),
                         criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Pausa de 1 segundo na contração concêntrica."),
+                        *( [criar_ex("curl_inclinado_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Alongamento profundo da cabeça longa do bíceps no banco a 45º.")] if foco_bracos else [] ),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Alongamento completo na base de cada repetição.")
                     ][:max_ex]
                 },
                 {
-                    "nome": "Dia 3: Superior B (Upper Hipertrofia & Deltoides Laterais)",
-                    "dia_nome": "Dia 3: Superior B (Upper Hipertrofia & Deltoides Laterais)",
-                    "foco": "Peitoral Superior, Costas e Bíceps",
+                    "nome": "Dia 3: Superior B (Upper Hipertrofia & Braços Foco)",
+                    "dia_nome": "Dia 3: Superior B (Upper Hipertrofia & Braços Foco)",
+                    "foco": "Peitoral Superior, Costas e Especialização de Braços" if foco_bracos else "Peitoral Superior, Costas e Bíceps",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
                         criar_ex("supino_inclinado_halteres" if not tem_onco_mama else ex_supino, s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Banco a 30 graus com pegada anatómica."),
                         criar_ex("puxada_frente_polia", s_secundario, reps_tier2, rpe_alvo, 90, "Pegada aberta pronada para expansão dorsal."),
                         criar_ex("elevacao_lateral_cabos", s_isolador, reps_tier3, rpe_alvo, 60, "Tensão máxima na cabeça lateral do deltoide."),
-                        criar_ex("remada_unilateral_haltere" if tem_onco_mama else "crucifixo_cabos", s_isolador, reps_tier3, rpe_alvo, 75, "Pico de contração controlado."),
-                        criar_ex("curl_martelo_halteres", s_braco, reps_tier4, rpe_alvo, 60, "Alongamento e tensão no braquial e bíceps.")
+                        *ex_braco_upper_b,
+                        *( [criar_ex("curl_biceps_barra_w", s_braco, reps_tier4, rpe_alvo, 60, "Estímulo adicional de pico de bíceps.")] if foco_bracos else [] )
                     ][:max_ex]
                 },
                 {
                     "nome": "Dia 4: Inferior B (Lower Foco Glúteos & Cadeia Posterior)",
                     "dia_nome": "Dia 4: Inferior B (Lower Foco Glúteos & Cadeia Posterior)",
-                    "foco": "Glúteos, Isquiotibiais e Unilaterais",
+                    "foco": "Glúteos, Isquiotibiais e Braços (Especialização)" if foco_bracos else "Glúteos, Isquiotibiais e Unilaterais",
                     "tempo_estimado_minutos": duracao,
                     "exercicios": [
                         criar_ex("hip_thrust_elevacao_pelvica", s_composto_base, reps_tier1, rpe_alvo, descanso_comp, "Pausa de 2 segundos no topo sem hiperestender a lombar."),
                         criar_ex("agachamento_bulgaro", s_secundario, reps_tier2, rpe_alvo, 90, "Tronco ligeiramente inclinado para frente para enfatizar o glúteo."),
                         criar_ex("extensao_pernas", s_isolador, reps_tier3, rpe_alvo, 75, "Cadência lenta sem impulsos bruscos."),
                         criar_ex("flexao_pernas_deitado", s_isolador, reps_tier4, rpe_alvo, 75, "Amplitude total com tensão excêntrica."),
+                        *( [criar_ex("triceps_corda_polia", s_braco, reps_tier4, rpe_alvo, 60, "Estímulo complementar de frequência e contração para o tríceps.")] if foco_bracos else [] ),
                         criar_ex("elevacao_gemeos_pe", s_detalhe, "12-15", rpe_alvo, 60, "Subida explosiva e descida em 3 segundos.")
                     ][:max_ex]
                 }
@@ -1079,6 +1116,7 @@ class ServicoCoachIA:
             "horario_e_compatibilidade_atividades": "\n".join(horario_atividades),
             "analise_plano_anterior_vs_reestruturado": analise_plano_anterior,
             "modo_demonstracao": True,
+            "provedor_usado": "Motor Biomecânico Heurístico Local (Offline / Sem Chave Gemini)",
             "sessoes": sessoes
         }
 
@@ -1504,6 +1542,7 @@ class ServicoCoachIA:
             "ajuste_horario_treino": f"Timing nutricional otimizado para treino à {horario_treino.capitalize()}.",
             "ajuste_apetite_e_saciedade": "\n".join(ajustes_apetite) if ajustes_apetite else "Refeições equilibradas.",
             "modo_demonstracao": True,
+            "provedor_usado": "Motor Biomecânico Heurístico Local (Offline / Sem Chave Gemini)",
             "refeicoes": refeicoes_geradas
         }
 
@@ -1655,6 +1694,7 @@ class ServicoCoachIA:
                 "dicas_timing_e_digestao": "Mantém o timing pré e pós-treino com boa biodisponibilidade de hidratos e espaça a ingestão de gorduras pesadas para longe do esforço físico intenso."
             },
             "modo_demonstracao": True,
+            "provedor_usado": "Motor Biomecânico Heurístico Local (Offline / Sem Chave Gemini)",
             "refeicoes": refeicoes_calibradas
         }
 
