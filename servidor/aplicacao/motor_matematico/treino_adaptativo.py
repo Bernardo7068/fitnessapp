@@ -6,6 +6,7 @@ deteta estagnações de carga e ajusta o volume semanal de séries de trabalho.
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+import re
 
 
 @dataclass
@@ -83,6 +84,157 @@ EXERCICIOS_CATALOGO = {
     "triceps_frances_cabos": {"nome": "Tríceps Francês na Polia (Cabeça Longa)", "primario": "triceps", "secundario": None, "tipo": "isolado"},
     "supino_fechado": {"nome": "Supino com Pegada Fechada", "primario": "triceps", "secundario": "peito", "tipo": "composto"}
 }
+
+
+_GRUPOS_MUSCULARES_CANONICOS = {
+    "peito": "peito",
+    "peitoral": "peito",
+    "costas": "costas",
+    "dorsal": "costas",
+    "dorsais": "costas",
+    "quadriceps": "quadriceps",
+    "quadríceps": "quadriceps",
+    "isquiotibiais": "isquiotibiais",
+    "posterior": "isquiotibiais",
+    "gluteos": "gluteos",
+    "glúteos": "gluteos",
+    "ombros": "ombros",
+    "deltoide": "ombros",
+    "deltoides": "ombros",
+    "biceps": "biceps",
+    "bíceps": "biceps",
+    "triceps": "triceps",
+    "tríceps": "triceps",
+    "gemeos": "gemeos",
+    "gémeos": "gemeos",
+}
+
+
+def normalizar_grupo_muscular(grupo: Optional[str]) -> str:
+    """Converte nomes livres de grupos musculares para uma chave estável."""
+    texto = (grupo or "").strip().lower()
+    texto = re.sub(r"\s+", " ", texto)
+    return _GRUPOS_MUSCULARES_CANONICOS.get(texto, texto or "outros")
+
+
+def calcular_volume_por_grupo(
+    sessoes: List[Dict[str, Any]],
+    contar_series_indiretas: bool = True
+) -> Dict[str, float]:
+    """
+    Calcula séries efetivas por grupo.
+    Séries diretas valem 1.0; séries como músculo secundário valem 0.5.
+    """
+    volume: Dict[str, float] = {}
+    for sessao in sessoes or []:
+        for exercicio in sessao.get("exercicios", []):
+            series = max(0.0, float(exercicio.get("series", 0) or 0))
+            primario = normalizar_grupo_muscular(
+                exercicio.get("grupo_muscular_primario") or exercicio.get("grupo_muscular")
+            )
+            volume[primario] = volume.get(primario, 0.0) + series
+            if contar_series_indiretas:
+                secundario = normalizar_grupo_muscular(exercicio.get("grupo_muscular_secundario"))
+                if secundario != "outros" and secundario != primario:
+                    volume[secundario] = volume.get(secundario, 0.0) + (series * 0.5)
+    return {grupo: round(valor, 1) for grupo, valor in volume.items()}
+
+
+def limitar_volume_personalizado(
+    sessoes: List[Dict[str, Any]],
+    series_alvo_semana: int = 14,
+    nivel_experiencia: str = "intermediario",
+    fase_projeto: str = "manutencao",
+    pontos_fracos: str = ""
+) -> Dict[str, Any]:
+    """
+    Limita séries diretas por músculo sem remover a estrutura do plano.
+    Prioridades recebem margem adicional; iniciantes e fases de défice recebem menos volume.
+    """
+    alvo = max(6, min(24, int(series_alvo_semana or 14)))
+    experiencia = (nivel_experiencia or "").lower()
+    fase = (fase_projeto or "").lower()
+    if "iniciante" in experiencia:
+        alvo = round(alvo * 0.75)
+    elif "avanc" in experiencia:
+        alvo = round(alvo * 1.10)
+    if any(token in fase for token in ("cut", "defin", "defice", "perda")):
+        alvo = round(alvo * 0.85)
+
+    texto_prioridades = (pontos_fracos or "").lower()
+    prioridades = {
+        grupo for token, grupo in _GRUPOS_MUSCULARES_CANONICOS.items()
+        if token in texto_prioridades
+    }
+    if any(token in texto_prioridades for token in ("braco", "braço", "braços", "biceps", "bíceps", "triceps", "tríceps")):
+        prioridades.update({"biceps", "triceps"})
+    if any(token in texto_prioridades for token in ("perna", "pernas")):
+        prioridades.update({"quadriceps", "isquiotibiais", "gluteos"})
+    limites = {grupo: alvo * (1.25 if grupo in prioridades else 1.0)
+               for grupo in set(
+                   normalizar_grupo_muscular(
+                       ex.get("grupo_muscular_primario") or ex.get("grupo_muscular")
+                   )
+                   for sessao in sessoes or []
+                   for ex in sessao.get("exercicios", [])
+               )}
+
+    # Reduz primeiro os exercícios acessórios no fim da semana, preservando compostos.
+    por_grupo: Dict[str, List[Dict[str, Any]]] = {}
+    for sessao in sessoes or []:
+        for ex in sessao.get("exercicios", []):
+            grupo = normalizar_grupo_muscular(
+                ex.get("grupo_muscular_primario") or ex.get("grupo_muscular")
+            )
+            por_grupo.setdefault(grupo, []).append(ex)
+
+    for grupo, exercicios in por_grupo.items():
+        limite = limites.get(grupo, float(alvo))
+        total = sum(float(ex.get("series", 0) or 0) for ex in exercicios)
+        excesso = max(0.0, total - limite)
+        for ex in reversed(exercicios):
+            if excesso <= 0:
+                break
+            atuais = max(1, int(ex.get("series", 1) or 1))
+            minimo = 2 if ex.get("tipo") == "composto" else 1
+            reducao = min(max(0, atuais - minimo), int(excesso))
+            ex["series"] = atuais - reducao
+            excesso -= reducao
+
+    volume_direto = {}
+    for grupo, exercicios in por_grupo.items():
+        volume_direto[grupo] = round(sum(float(ex.get("series", 0) or 0) for ex in exercicios), 1)
+    return {
+        "volume_direto_por_grupo": volume_direto,
+        "limites_por_grupo": {grupo: round(limite, 1) for grupo, limite in limites.items()},
+        "grupos_prioritarios": sorted(prioridades),
+        "series_alvo_ajustado": alvo,
+    }
+
+
+def validar_plano_treino_personalizado(
+    plano: Dict[str, Any],
+    dias_semana: int,
+    tempo_sessao_minutos: int
+) -> List[str]:
+    """Valida invariantes estruturais antes de um plano personalizado ser guardado."""
+    erros: List[str] = []
+    sessoes = plano.get("sessoes") or []
+    if len(sessoes) != dias_semana:
+        erros.append(f"O plano contém {len(sessoes)} sessões; eram esperadas {dias_semana}.")
+    for indice, sessao in enumerate(sessoes):
+        if not sessao.get("exercicios"):
+            erros.append(f"A sessão {indice + 1} não contém exercícios.")
+        if int(sessao.get("tempo_estimado_minutos", tempo_sessao_minutos) or tempo_sessao_minutos) <= 0:
+            erros.append(f"A sessão {indice + 1} tem duração inválida.")
+        for exercicio in sessao.get("exercicios", []):
+            exercicio_id = exercicio.get("id_exercicio")
+            if exercicio_id and exercicio_id not in EXERCICIOS_CATALOGO and not exercicio_id.startswith("custom_"):
+                erros.append(f"Exercício desconhecido: {exercicio_id}.")
+            series = int(exercicio.get("series", 0) or 0)
+            if series < 1 or series > 8:
+                erros.append(f"Séries inválidas no exercício {exercicio.get('nome', exercicio_id)}.")
+    return erros
 
 
 def gerar_plano_treino_otimizado(

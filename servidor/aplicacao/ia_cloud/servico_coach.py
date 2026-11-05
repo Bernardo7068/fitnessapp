@@ -22,7 +22,12 @@ from .prompts_ia import (
     PROMPT_SISTEMA_SUBSTITUICAO_EXERCICIO,
     criar_prompt_substituicao_exercicio
 )
-from ..motor_matematico.treino_adaptativo import EXERCICIOS_CATALOGO
+from ..motor_matematico.treino_adaptativo import (
+    EXERCICIOS_CATALOGO,
+    calcular_volume_por_grupo,
+    limitar_volume_personalizado,
+    validar_plano_treino_personalizado,
+)
 from ..motor_matematico.dieta_adaptativa import TABELA_ALIMENTOS_EQUIVALENCIAS, calcular_substituicao_alimento, normalizar_fase
 
 
@@ -1089,12 +1094,26 @@ class ServicoCoachIA:
                 }
             ]
 
+        controlo_volume = limitar_volume_personalizado(
+            sessoes=sessoes,
+            series_alvo_semana=series_alvo,
+            nivel_experiencia=nivel_exp,
+            fase_projeto=fase,
+            pontos_fracos=f"{pontos_fracos} {foco_proj} {objetivos_det}",
+        )
         volume_total = sum(sum(ex["series"] for ex in s["exercicios"]) for s in sessoes)
+        volume_por_grupo = calcular_volume_por_grupo(sessoes)
+        erros_validacao = validar_plano_treino_personalizado(
+            {"sessoes": sessoes},
+            dias_semana=dias,
+            tempo_sessao_minutos=duracao,
+        )
 
         analise_bio = (
             f"O motor adaptativo desenhou uma periodização anatómica estrita com {volume_total} séries semanais totais. "
             f"Os exercícios foram agrupados por contiguidade muscular (sem alternâncias caóticas entre pernas e tronco), "
-            f"respeitando a meta de {duracao} minutos por sessão e o perfil biomecânico do atleta."
+            f"respeitando a meta de {duracao} minutos por sessão, o perfil biomecânico do atleta e "
+            f"um alvo ajustado de {controlo_volume['series_alvo_ajustado']} séries diretas por grupo."
         )
 
         sincro = (
@@ -1108,6 +1127,10 @@ class ServicoCoachIA:
             "tempo_sessao_minutos": duracao,
             "foco_principal": foco_desc,
             "volume_total_series_semana": volume_total,
+            "volume_por_grupo_muscular": volume_por_grupo,
+            "limites_volume_por_grupo": controlo_volume["limites_por_grupo"],
+            "grupos_prioritarios": controlo_volume["grupos_prioritarios"],
+            "erros_validacao": erros_validacao,
             "cadencia_rotativa": cadencia_label,
             "analise_biomecanica_ia": analise_bio,
             "ajustes_para_lesoes": "\n".join(ajustes_lesao) if ajustes_lesao else "• Sem lesões impeditivas: Biomecânica padrão com ampla liberdade de movimentos compostos.",

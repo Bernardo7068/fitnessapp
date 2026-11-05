@@ -35,7 +35,11 @@ from .treino_adaptativo import (
     PlanoTreinoCompleto,
     SessaoTreino,
     ExercicioTreino,
-    EXERCICIOS_CATALOGO
+    EXERCICIOS_CATALOGO,
+    normalizar_grupo_muscular,
+    calcular_volume_por_grupo,
+    limitar_volume_personalizado,
+    validar_plano_treino_personalizado
 )
 
 __all__ = [
@@ -60,5 +64,9 @@ __all__ = [
     "PlanoTreinoCompleto",
     "SessaoTreino",
     "ExercicioTreino",
-    "EXERCICIOS_CATALOGO"
+    "EXERCICIOS_CATALOGO",
+    "normalizar_grupo_muscular",
+    "calcular_volume_por_grupo",
+    "limitar_volume_personalizado",
+    "validar_plano_treino_personalizado"
 ]
